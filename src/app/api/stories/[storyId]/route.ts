@@ -52,7 +52,7 @@ export async function GET(
     if (story.file_path) {
       try {
         const { data, error: downloadError } = await supabase.storage
-          .from('stories')
+          .from('my-own-novel')
           .download(story.file_path)
         
         if (downloadError) {

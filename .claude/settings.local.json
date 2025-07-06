@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(claude mcp)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "mcp__vooster-ai__connect_project",
+      "mcp__vooster-ai__list_projects",
+      "mcp__vooster-ai__init_rules",
+      "Bash(npx @vooster/cli@latest rules:init:*)",
+      "mcp__vooster-ai__get_next_task",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(sed:*)",
+      "Bash(for:*)",
+      "Bash(do sed -i 's/@\\/lib\\/utils/..\\/lib\\/utils/g' \"$file\")",
+      "Bash(done)",
+      "mcp__vooster-ai__update_subtask_status",
+      "mcp__ide__getDiagnostics",
+      "mcp__vooster-ai__update_task_status",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "Bash(pkill:*)",
+      "mcp__vooster-ai__read_task",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(curl:*)",
+      "Bash(npm run dev:*)",
+      "Bash(rm:*)",
+      "Bash(npx tsc:*)"
+    ],
+    "deny": []
+  }
+}

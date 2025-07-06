@@ -1,0 +1,636 @@
+## MVP Review and Suggested Improvements
+
+Your initial data flow diagrams and schema design are very detailed and well-structured. However, considering the goal of an **MVP for a fast launch**, certain features or complexities can be streamlined or postponed.
+
+### 1\. Data Flow Diagrams
+
+The data flows clearly illustrate the system's overall process. For an MVP, we can simplify some of these flows.
+
+#### 1.1 Overall System Data Flow
+
+  * **Overspec: `M[버전 관리] (Version Management)`, `N[공유 링크 생성] (Share Link Generation)`, `O[소셜 공유] (Social Sharing)`**
+      * **Explanation**: For an MVP, I strongly recommend focusing on novel generation and saving. **Postponing version management, novel sharing, and social sharing features** until after the initial launch will significantly reduce development time and complexity. An MVP is sufficient if users can generate a novel and save it for their personal viewing.
+      * **Improvement**: Simplify the flow to go directly from `K[소설 생성] (Novel Generation)` to `L[소설 저장] (Novel Saving)`.
+
+#### 1.3 Novel Generation Flow
+
+  * **Overspec: `M[버전 저장] (Version Saving)`**
+      * **Explanation**: Similar to the overall system data flow, **novel version management can be excluded** from the MVP. Focusing solely on saving the final version is sufficient for the first release.
+      * **Improvement**: The flow should end after `L[데이터베이스 저장] (Database Storage)`.
+
+#### 1.5 Sharing and Access Control Flow
+
+  * **Overspec: Entire Flow**
+      * **Explanation**: As mentioned for the overall system flow, **sharing functionality should be completely excluded** from the MVP to save development resources.
+      * **Improvement**: This entire flow is removed for the MVP.
+
+-----
+
+### 2\. Entity Relationship Diagram (ERD) & Detailed Table Design
+
+The schema is robust and well-designed. However, for an MVP, some tables or columns can be streamlined.
+
+#### 2.1 User Table
+
+  * **Overspec/Improvement: `preferences` (JSONB)**
+      * **Explanation**: User settings (`preferences`) can be **minimized or even removed** for the MVP. Basic functionalities like language settings can be handled on the frontend or stored in a simpler column if absolutely necessary. While JSONB offers flexibility, it adds initial design complexity.
+      * **Improvement**: Remove the `preferences` column from the MVP, or replace it with a simple `VARCHAR(20)` for `language` if needed.
+
+#### 2.3 Timeline Table
+
+  * **Overspec/Improvement: `processed_locations` (JSONB), `location_count` (INTEGER)**
+      * **Explanation**: `processed_locations` and `location_count` aim for efficient normalization and caching of timeline data. In an MVP, you can **process AI prompts directly from the raw data (`raw_data`)** and defer location data normalization/counting. Avoiding the overhead of processing large volumes of timeline data is beneficial for an MVP.
+      * **Improvement**: Remove `processed_locations` and `location_count` columns.
+
+#### 2.4 Story Table
+
+  * **Overspec/Improvement: `share_token`, `is_public`, `view_count`**
+      * **Explanation**: These columns related to **sharing functionality should be excluded** from the MVP, aligning with the decision to remove sharing.
+      * **Improvement**: Remove `share_token`, `is_public`, and `view_count` columns.
+
+#### 2.5 StoryVersion Table
+
+  * **Overspec: Entire Table**
+      * **Explanation**: The `StoryVersion` table should be **completely removed for the MVP**. Version management can be added later once the service is stable and user feedback is gathered. Removing this table significantly reduces database design, Prisma ORM configuration, and backend logic complexity.
+      * **Improvement**: Remove the `StoryVersion` table.
+
+#### 2.6 StoryShare Table
+
+  * **Overspec: Entire Table**
+      * **Explanation**: Since **sharing functionality is excluded from the MVP**, this table should also be **completely removed**.
+      * **Improvement**: Remove the `StoryShare` table.
+
+#### 2.7 AIPrompt Table
+
+  * **Appropriate (can be included in MVP): `token_usage` (DECIMAL)**
+      * **Explanation**: `token_usage` is crucial for tracking AI API costs, so it's good to include it even in an MVP. Minimal cost tracking is essential.
+  * **Overspec/Improvement: `ai_provider` (VARCHAR(50))**
+      * **Explanation**: In the MVP phase, you're likely to use only one AI provider (e.g., OpenAI). `ai_provider` is useful for integrating multiple AI services later, but it's unnecessary initially.
+      * **Improvement**: Remove the `ai_provider` column, or handle it with a hardcoded value if absolutely necessary for internal logging.
+
+#### 2.8 GenerationJob Table
+
+  * **Error/Improvement: `story_id` (FK)**
+      * **Explanation**: The `story_id` in the `GenerationJob` table should **allow `NULL` initially** because a job might start before a `Story` entry is finalized (e.g., an AI prompt generation job). The `story_id` can be updated once the story is fully created.
+      * **Improvement**: Change the `story_id` column's constraint to allow `NULL`.
+
+-----
+
+### 3\. Security and Performance Considerations
+
+Most of these are good long-term approaches, but their priority can be adjusted for an MVP.
+
+#### 3.1 Security
+
+  * **Appropriate: `Data Encryption` (OAuth Tokens), `Token Management`, `Access Control`**
+      * **Explanation**: User data protection is paramount even for an MVP. OAuth token encryption and basic access control are essential. Automated cleanup of expired tokens is important but can be managed manually or by leveraging Supabase's built-in features for the MVP.
+  * **Overspec: `RLS (Row Level Security)`**
+      * **Explanation**: While RLS is powerful for fine-grained access control, setting it up correctly adds complexity. For an MVP, basic authorization logic within your application layer might suffice initially, especially if Supabase's core features already provide adequate user authentication.
+      * **Improvement**: Consider moving RLS to a post-MVP phase or ensure it's simple to configure if relying solely on Supabase's built-in RLS for basic user-data separation. (The migration script will reflect its removal.)
+
+#### 3.2 Performance
+
+  * **Appropriate: `Index Optimization`, `JSONB Utilization`**
+      * **Explanation**: These have minimal overhead to implement initially and directly impact performance, so they should be kept.
+  * **Overspec: `Partitioning`, `Caching`**
+      * **Explanation**: **Partitioning** and **caching (using Redis)** are advanced optimization techniques for high traffic or large data volumes. For an MVP, where data volume will be low, these are **clear overspecifications**. Consider them only after launch if performance bottlenecks are identified.
+      * **Improvement**: Exclude partitioning and caching from the MVP.
+
+#### 3.3 Data Integrity
+
+  * **Appropriate: `Foreign Key Constraints`, `Check Constraints`, `Triggers`, `Backup`**
+      * **Explanation**: Data integrity is crucial for service reliability and should be maintained even in an MVP. Foreign key constraints, and `updated_at` triggers are essential. Leverage Supabase's native backup features.
+
+-----
+
+### 4\. Migration Scripts
+
+The migration scripts need to be updated to reflect the schema changes for the MVP, and with the specific removals requested.
+
+#### 4.1 Initial Table Creation
+
+  * Remove the creation scripts for `StoryVersion` and `StoryShare` tables.
+  * Remove `share_token`, `is_public`, and `view_count` columns from the `stories` table.
+  * Remove `processed_locations` and `location_count` columns from the `timelines` table.
+  * Remove the `ai_provider` column from the `ai_prompts` table.
+  * Modify the `story_id` column in the `generation_jobs` table to allow `NULL` (change `NOT NULL` to be removed, so it looks like: `story_id UUID REFERENCES stories(id) ON DELETE CASCADE,`).
+
+#### 4.2 Index Creation
+
+  * Remove index creation scripts for the removed tables (`StoryVersion`, `StoryShare`) and columns.
+  * Remove the `idx_ai_prompt_provider` index creation script.
+
+#### 4.3 Triggers and Functions (Excluded as per request)
+
+#### 4.4 RLS (Row Level Security) Configuration (Excluded as per request)
+
+-----
+
+### 5\. Future Expansion Considerations
+
+  * For the MVP, this section's content does not need to be implemented. Keep it as **future plans** only.
+
+-----
+
+## Final Version (MVP Focused)
+
+Here is the complete, streamlined data flow, schema, and migration scripts optimized for an MVP.
+
+-----
+
+# Database Schema Design (ERD) - MVP
+
+## Overview
+
+This is the database schema for a Google Timeline-based AI novel generation service, designed for an MVP.
+It's built on Supabase (PostgreSQL) + Prisma ORM.
+
+-----
+
+## 1\. Data Flow Diagrams (MVP)
+
+### 1.1 Overall System Data Flow (MVP)
+
+```mermaid
+flowchart TD
+    A[User] --> B[Google OAuth Login]
+    B --> C[Store OAuth Token]
+    C --> D[Call Google Timeline API]
+    D --> E[Collect Timeline Data]
+    E --> F[Normalize Location Data]
+    F --> G[Generate AI Prompt]
+    G --> H[Call AI API]
+    H --> I[Present Choices]
+    I --> J{User Selection}
+    J -->|Selection Complete| K[Generate Novel]
+    J -->|More Choices| G
+    K --> L[Save Novel]
+    
+    style A fill:#e1f5fe
+    style K fill:#c8e6c9
+```
+
+### 1.2 User Authentication Flow (No Change)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant A as Auth API
+    participant G as Google OAuth
+    participant DB as Database
+    
+    U->>F: Login Request
+    F->>G: OAuth Authentication Request
+    G->>U: Authorization Prompt
+    U->>G: Authorize
+    G->>A: Pass Authorization Code
+    A->>G: Request Access Token
+    G->>A: Issue Token
+    A->>DB: Save User Info
+    A->>DB: Save OAuth Token
+    A->>F: Authentication Complete
+    F->>U: Navigate to Dashboard
+```
+
+### 1.3 Novel Generation Flow (MVP)
+
+```mermaid
+flowchart LR
+    A[Select Timeline] --> B[Collect Data]
+    B --> C[Extract Locations]
+    C --> D[Generate AI Prompt]
+    D --> E[Create Background Job]
+    E --> F[Call AI API]
+    F --> G[Generate Choices]
+    G --> H[User Selection]
+    H --> I[Expand Story]
+    I --> J{Completion?}
+    J -->|Not Complete| G
+    J -->|Complete| K[Final Novel Generation]
+    K --> L[Save to Database]
+    
+    style A fill:#e3f2fd
+    style K fill:#e8f5e8
+```
+
+### 1.4 Data Processing Pipeline (MVP)
+
+```mermaid
+graph TD
+    subgraph "Data Collection"
+        A[Google Timeline API] --> B[Save Raw JSON]
+        B --> C[Extract Location Data]
+        C --> D[Analyze Temporal Path]
+    end
+    
+    subgraph "AI Processing"
+        D --> E[Generate Prompt Template]
+        E --> F[Call AI API]
+        F --> G[Parse Response]
+        G --> H[Extract Choices]
+    end
+    
+    subgraph "User Interaction"
+        H --> I[Present Choices]
+        I --> J[User Selection]
+        J --> K[Save Selection]
+        K --> L{Story Complete}
+        L -->|Continue| E
+        L -->|Complete| M[Final Novel Generation]
+    end
+    
+    subgraph "Data Storage"
+        M --> N[Save to Story Table]
+        N --> P[AIPrompt Log Save]
+        P --> Q[GenerationJob Complete]
+    end
+    
+    style A fill:#ffebee
+    style F fill:#e8f5e8
+    style I fill:#e3f2fd
+    style N fill:#fff3e0
+```
+
+### 1.5 Sharing and Access Control Flow (Excluded in MVP)
+
+-----
+
+## 2\. Entity Relationship Diagram (ERD) - MVP
+
+```mermaid
+erDiagram
+    User {
+        uuid id PK
+        string email UK
+        string name
+        string avatar_url
+        string google_id UK
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    OAuthToken {
+        uuid id PK
+        uuid user_id FK
+        string provider
+        string access_token
+        string refresh_token
+        timestamp expires_at
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    Timeline {
+        uuid id PK
+        uuid user_id FK
+        date timeline_date
+        json raw_data
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    Story {
+        uuid id PK
+        uuid user_id FK
+        uuid timeline_id FK
+        string title
+        string genre
+        text content
+        json metadata
+        string status
+        json ai_choices
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    AIPrompt {
+        uuid id PK
+        uuid story_id FK
+        string prompt_type
+        text prompt_text
+        json response_data
+        float token_usage
+        timestamp created_at
+    }
+    
+    GenerationJob {
+        uuid id PK
+        uuid story_id FK
+        uuid user_id FK
+        string job_type
+        string status
+        json parameters
+        json result
+        json error_log
+        timestamp started_at
+        timestamp completed_at
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    User ||--o{ OAuthToken : "has"
+    User ||--o{ Timeline : "owns"
+    User ||--o{ Story : "creates"
+    User ||--o{ GenerationJob : "requests"
+    Timeline ||--o{ Story : "generates"
+    Story ||--o{ AIPrompt : "uses"
+    Story ||--o{ GenerationJob : "processes"
+```
+
+-----
+
+## 2\. Detailed Table Design (MVP)
+
+### 2.1 User
+
+Manages basic user information and profiles.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | Unique user identifier |
+| email | VARCHAR(255) | UNIQUE, NOT NULL | User's email address |
+| name | VARCHAR(100) | NOT NULL | User's name |
+| avatar\_url | TEXT | NULL | Profile image URL |
+| google\_id | VARCHAR(100) | UNIQUE, NOT NULL | Google account ID |
+| created\_at | TIMESTAMP | DEFAULT NOW() | Account creation timestamp |
+| updated\_at | TIMESTAMP | DEFAULT NOW() | Last update timestamp |
+
+**Indexes:**
+
+  - `idx_user_email` ON (email)
+  - `idx_user_google_id` ON (google\_id)
+
+### 2.2 OAuthToken
+
+Manages Google OAuth tokens.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | Unique token identifier |
+| user\_id | UUID | FOREIGN KEY, NOT NULL | User ID |
+| provider | VARCHAR(50) | NOT NULL | OAuth provider (e.g., google) |
+| access\_token | TEXT | NOT NULL | Access token (encrypted) |
+| refresh\_token | TEXT | NULL | Refresh token (encrypted) |
+| expires\_at | TIMESTAMP | NOT NULL | Token expiration timestamp |
+| created\_at | TIMESTAMP | DEFAULT NOW() | Token creation timestamp |
+| updated\_at | TIMESTAMP | DEFAULT NOW() | Token update timestamp |
+
+**Indexes:**
+
+  - `idx_oauth_user_provider` ON (user\_id, provider)
+  - `idx_oauth_expires_at` ON (expires\_at)
+
+### 2.3 Timeline
+
+Stores Google Timeline raw data.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | Unique timeline identifier |
+| user\_id | UUID | FOREIGN KEY, NOT NULL | User ID |
+| timeline\_date | DATE | NOT NULL | Date of the timeline data |
+| raw\_data | JSONB | NOT NULL | Raw Google Timeline data |
+| created\_at | TIMESTAMP | DEFAULT NOW() | Data collection timestamp |
+| updated\_at | TIMESTAMP | DEFAULT NOW() | Last update timestamp |
+
+**Indexes:**
+
+  - `idx_timeline_user_date` ON (user\_id, timeline\_date)
+  - `idx_timeline_date` ON (timeline\_date)
+
+### 2.4 Story
+
+Stores AI-generated novel metadata and content.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | Unique novel identifier |
+| user\_id | UUID | FOREIGN KEY, NOT NULL | Author ID |
+| timeline\_id | UUID | FOREIGN KEY, NOT NULL | Base timeline ID |
+| title | VARCHAR(200) | NOT NULL | Novel title |
+| genre | VARCHAR(50) | NOT NULL | Genre (e.g., SF, Romance, Comedy) |
+| content | TEXT | NOT NULL | Novel body content |
+| metadata | JSONB | DEFAULT '{}' | Novel metadata |
+| status | VARCHAR(20) | DEFAULT 'draft' | Status (e.g., draft, published, archived) |
+| ai\_choices | JSONB | DEFAULT '[]' | AI choice data |
+| created\_at | TIMESTAMP | DEFAULT NOW() | Novel creation timestamp |
+| updated\_at | TIMESTAMP | DEFAULT NOW() | Last update timestamp |
+
+**Indexes:**
+
+  - `idx_story_user_created` ON (user\_id, created\_at DESC)
+  - `idx_story_timeline` ON (timeline\_id)
+
+### 2.5 StoryVersion (Excluded in MVP)
+
+### 2.6 StoryShare (Excluded in MVP)
+
+### 2.7 AIPrompt
+
+Logs AI API calls and responses.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | Unique prompt identifier |
+| story\_id | UUID | FOREIGN KEY, NOT NULL | Story ID |
+| prompt\_type | VARCHAR(50) | NOT NULL | Prompt type (e.g., story, choice, title) |
+| prompt\_text | TEXT | NOT NULL | Prompt text sent to AI |
+| response\_data | JSONB | NOT NULL | AI response data |
+| token\_usage | DECIMAL(10,2) | DEFAULT 0 | AI token usage |
+| created\_at | TIMESTAMP | DEFAULT NOW() | Prompt creation timestamp |
+
+**Indexes:**
+
+  - `idx_ai_prompt_story` ON (story\_id)
+  - `idx_ai_prompt_type` ON (prompt\_type)
+  - `idx_ai_prompt_created` ON (created\_at DESC)
+
+### 2.8 GenerationJob
+
+Manages background generation tasks.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | Unique job identifier |
+| story\_id | UUID | FOREIGN KEY, NULL | Story ID (can be NULL at job start) |
+| user\_id | UUID | FOREIGN KEY, NOT NULL | User ID |
+| job\_type | VARCHAR(50) | NOT NULL | Job type (e.g., story\_generation, image\_generation) |
+| status | VARCHAR(20) | DEFAULT 'pending' | Job status (e.g., pending, processing, completed, failed) |
+| parameters | JSONB | DEFAULT '{}' | Job parameters |
+| result | JSONB | NULL | Job result |
+| error\_log | JSONB | NULL | Error log |
+| started\_at | TIMESTAMP | NULL | Job start timestamp |
+| completed\_at | TIMESTAMP | NULL | Job completion timestamp |
+| created\_at | TIMESTAMP | DEFAULT NOW() | Job creation timestamp |
+| updated\_at | TIMESTAMP | DEFAULT NOW() | Last update timestamp |
+
+**Indexes:**
+
+  - `idx_generation_job_status` ON (status)
+  - `idx_generation_job_user` ON (user\_id)
+  - `idx_generation_job_story` ON (story\_id)
+  - `idx_generation_job_created` ON (created\_at DESC)
+
+-----
+
+## 3\. Security and Performance Considerations (MVP)
+
+### 3.1 Security
+
+  - **Data Encryption**: Encrypt OAuth tokens with AES-256.
+  - **Token Management**: Consider automatic cleanup of expired tokens (e.g., using Supabase's built-in features).
+  - **Access Control**: Configure appropriate permissions for each table through your application logic.
+
+### 3.2 Performance
+
+  - **Index Optimization**: Set indexes on frequently queried columns.
+  - **JSONB Utilization**: Efficiently store and query metadata.
+
+### 3.3 Data Integrity
+
+  - **Foreign Key Constraints**: Ensure referential integrity.
+  - **Check Constraints**: Validate status values (apply if needed for `status` column).
+  - **Triggers**: Automatically update `updated_at` columns.
+  - **Backup**: Leverage daily automatic backups and Point-in-Time Recovery (via Supabase).
+
+-----
+
+## 4\. Migration Scripts (MVP)
+
+### 4.1 Initial Table Creation
+
+```sql
+-- Users table
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    avatar_url TEXT,
+    google_id VARCHAR(100) UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- OAuth tokens table
+CREATE TABLE oauth_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider VARCHAR(50) NOT NULL,
+    access_token TEXT NOT NULL,
+    refresh_token TEXT,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Timeline data table
+CREATE TABLE timelines (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    timeline_date DATE NOT NULL,
+    raw_data JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Stories table
+CREATE TABLE stories (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    timeline_id UUID NOT NULL REFERENCES timelines(id) ON DELETE CASCADE,
+    title VARCHAR(200) NOT NULL,
+    genre VARCHAR(50) NOT NULL,
+    content TEXT NOT NULL,
+    metadata JSONB DEFAULT '{}',
+    status VARCHAR(20) DEFAULT 'draft',
+    ai_choices JSONB DEFAULT '[]',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- AI prompts table
+CREATE TABLE ai_prompts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    story_id UUID NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+    prompt_type VARCHAR(50) NOT NULL,
+    prompt_text TEXT NOT NULL,
+    response_data JSONB NOT NULL,
+    token_usage DECIMAL(10,2) DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Generation jobs table
+CREATE TABLE generation_jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    story_id UUID REFERENCES stories(id) ON DELETE CASCADE, -- NULL allowed
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_type VARCHAR(50) NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending',
+    parameters JSONB DEFAULT '{}',
+    result JSONB,
+    error_log JSONB,
+    started_at TIMESTAMP WITH TIME ZONE,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+### 4.2 Index Creation
+
+```sql
+-- User indexes
+CREATE INDEX idx_user_email ON users(email);
+CREATE INDEX idx_user_google_id ON users(google_id);
+
+-- OAuth token indexes
+CREATE INDEX idx_oauth_user_provider ON oauth_tokens(user_id, provider);
+CREATE INDEX idx_oauth_expires_at ON oauth_tokens(expires_at);
+
+-- Timeline indexes
+CREATE INDEX idx_timeline_user_date ON timelines(user_id, timeline_date);
+CREATE INDEX idx_timeline_date ON timelines(timeline_date);
+
+-- Story indexes
+CREATE INDEX idx_story_user_created ON stories(user_id, created_at DESC);
+CREATE INDEX idx_story_timeline ON stories(timeline_id);
+
+-- AI prompt indexes
+CREATE INDEX idx_ai_prompt_story ON ai_prompts(story_id);
+CREATE INDEX idx_ai_prompt_type ON ai_prompts(prompt_type);
+CREATE INDEX idx_ai_prompt_created ON ai_prompts(created_at DESC);
+
+-- Generation job indexes
+CREATE INDEX idx_generation_job_status ON generation_jobs(status);
+CREATE INDEX idx_generation_job_user ON generation_jobs(user_id);
+CREATE INDEX idx_generation_job_story ON generation_jobs(story_id);
+CREATE INDEX idx_generation_job_created ON generation_jobs(created_at DESC);
+```
+
+-----
+
+## 5\. Future Expansion Considerations (No Change)
+
+### 5.1 Extensible Structure
+
+  - **Multimedia Support**: Add tables for image, audio attachments.
+  - **Social Features**: Add tables for likes, comments, follows.
+  - **Premium Features**: Add tables for subscriptions, payments.
+  - **Analytics**: Add tables for user behavior analysis.
+
+### 5.2 Performance Optimization
+
+  - **Read Replicas**: Utilize read-only databases for high query loads.
+  - **Data Archiving**: Move old data to separate archive tables.
+  - **Sharding**: Consider distributing data by user.
+
+### 5.3 Monitoring and Management
+
+  - **Logging Tables**: System logs, user activity logs.
+  - **Metrics Tables**: Performance metrics, usage statistics.
+  - **Configuration Tables**: System settings, feature flags.
+
+-----
+
+This MVP-focused ERD is designed to prioritize **quick launch** by concentrating on core functionalities. You can progressively add features and refine the schema based on user feedback and service expansion.

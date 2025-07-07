@@ -199,6 +199,26 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                   )}
                 </motion.h1>
                 
+                {/* 선택된 장르 표시 */}
+                <AnimatePresence>
+                  {selectedGenre && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.6 }}
+                      className="mb-8"
+                    >
+                      <div className="inline-flex items-center gap-3 px-6 py-3 bg-white/90 border border-gray-200 rounded-full shadow-sm backdrop-blur-sm">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: getGenreAnimation(selectedGenre).primaryColor }}></div>
+                        <span className="text-lg font-medium text-gray-800">
+                          {GENRES.find(g => g.key === selectedGenre)?.label} 선택됨
+                        </span>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                
                 <motion.p 
                   className="text-lg md:text-xl text-gray-600 mb-16 font-light"
                   initial={{ y: 20, opacity: 0 }}
@@ -277,6 +297,40 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                   )}
                 </motion.h1>
                 
+                {/* 선택된 장르와 스타일 표시 */}
+                <div className="flex flex-wrap justify-center gap-4 mb-8">
+                  <AnimatePresence>
+                    {selectedGenre && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.5 }}
+                      >
+                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/90 border border-gray-200 rounded-full shadow-sm backdrop-blur-sm">
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getGenreAnimation(selectedGenre).primaryColor }}></div>
+                          <span className="text-sm font-medium text-gray-700">
+                            {GENRES.find(g => g.key === selectedGenre)?.label}
+                          </span>
+                        </div>
+                      </motion.div>
+                    )}
+                    {selectedStyle && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.5, delay: 0.1 }}
+                      >
+                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/90 border border-gray-200 rounded-full shadow-sm backdrop-blur-sm">
+                          <div className="w-2 h-2 rounded-full bg-gray-500"></div>
+                          <span className="text-sm font-medium text-gray-700">
+                            {STYLES.find(s => s.key === selectedStyle)?.label}
+                          </span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+                
                 <motion.p 
                   className="text-lg md:text-xl text-gray-600 mb-16 font-light"
                   initial={{ y: 20, opacity: 0 }}
@@ -347,6 +401,31 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                     </motion.span>
                   )}
                 </motion.h1>
+                
+                {/* 최종 선택사항 요약 */}
+                <motion.div 
+                  className="flex flex-wrap justify-center gap-4 mb-12"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.8, duration: 0.8 }}
+                >
+                  {selectedGenre && (
+                    <div className="inline-flex items-center gap-3 px-6 py-3 bg-white/90 border border-gray-200 rounded-full shadow-md backdrop-blur-sm">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: getGenreAnimation(selectedGenre).primaryColor }}></div>
+                      <span className="font-medium text-gray-800">
+                        {GENRES.find(g => g.key === selectedGenre)?.label}
+                      </span>
+                    </div>
+                  )}
+                  {selectedStyle && (
+                    <div className="inline-flex items-center gap-3 px-6 py-3 bg-white/90 border border-gray-200 rounded-full shadow-md backdrop-blur-sm">
+                      <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+                      <span className="font-medium text-gray-800">
+                        {STYLES.find(s => s.key === selectedStyle)?.label}
+                      </span>
+                    </div>
+                  )}
+                </motion.div>
                 
                 <motion.div
                   className="flex items-center justify-center mt-16"

@@ -31,7 +31,11 @@
       "Bash(npx tsc:*)",
       "Bash(timeout:*)",
       "Bash(true)",
-      "Bash(pnpm run:*)"
+      "Bash(pnpm run:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx supabase:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(npm run type-check:*)"
     ],
     "deny": []
   }

@@ -220,6 +220,7 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                 <AnimatePresence>
                   {selectedGenre && (
                     <motion.div
+                      key={`selected-genre-${selectedGenre}`}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -20 }}
@@ -239,6 +240,7 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                 <AnimatePresence>
                   {showSubtitle && (
                     <motion.p 
+                      key="genre-subtitle"
                       className="text-lg md:text-xl text-gray-600 mb-16 font-light"
                       initial={{ y: 20, opacity: 0 }}
                       animate={{ y: 0, opacity: 1 }}
@@ -253,6 +255,7 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                 <AnimatePresence>
                   {showChoices && (
                     <motion.div 
+                      key="genre-choices"
                       className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -266,7 +269,7 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                         
                         return (
                         <motion.button
-                          key={genre.key}
+                          key={`genre-${genre.key}-${index}`}
                           className={`p-8 border rounded-lg transition-all duration-300 text-left group ${
                             isSelected 
                               ? 'border-gray-300 shadow-lg bg-white relative z-10' 
@@ -349,6 +352,7 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                   <AnimatePresence>
                     {selectedGenre && (
                       <motion.div
+                        key={`style-selected-genre-${selectedGenre}`}
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.5 }}
@@ -363,6 +367,7 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                     )}
                     {selectedStyle && (
                       <motion.div
+                        key={`style-selected-style-${selectedStyle}`}
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.5, delay: 0.1 }}
@@ -381,6 +386,7 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                 <AnimatePresence>
                   {showSubtitle && (
                     <motion.p 
+                      key="style-subtitle"
                       className="text-lg md:text-xl text-gray-600 mb-16 font-light"
                       initial={{ y: 20, opacity: 0 }}
                       animate={{ y: 0, opacity: 1 }}
@@ -395,6 +401,7 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                 <AnimatePresence>
                   {showChoices && (
                     <motion.div 
+                      key="style-choices"
                       className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -407,7 +414,7 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                         
                         return (
                         <motion.button
-                          key={style.key}
+                          key={`style-${style.key}-${index}`}
                           className={`p-10 border rounded-lg transition-all duration-300 text-center group relative ${
                             isSelected 
                               ? 'border-gray-300 shadow-lg bg-white z-10' 

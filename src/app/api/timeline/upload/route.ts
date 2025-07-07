@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/supabase/server'
+import { createClient, createPureClient } from '@/supabase/server'
 import { TimelineApiResponse, TimelineLocation } from '@/features/timeline/types'
 
 export async function POST(request: NextRequest) {
@@ -304,15 +304,18 @@ async function saveLocationHistory(
     const startDate = sortedLocations[0].timestamp.split('T')[0]
     const endDate = sortedLocations[sortedLocations.length - 1].timestamp.split('T')[0]
     
+    // Service Role 클라이언트 생성 (RLS 우회용)
+    const adminSupabase = await createPureClient()
+    
     // 기존 Google Takeout 데이터 삭제 (새로 업로드된 것으로 교체)
-    await supabase
+    await adminSupabase
       .from('timelines')
       .delete()
       .eq('user_id', userId)
       .eq('source', 'google_takeout')
 
     // timelines 테이블에 메인 데이터 저장
-    const { data: timelineData, error: timelineError } = await supabase
+    const { data: timelineData, error: timelineError } = await adminSupabase
       .from('timelines')
       .insert({
         user_id: userId,
@@ -348,7 +351,7 @@ async function saveLocationHistory(
     // 장소 방문 정보 생성 및 저장 (locations를 분석하여 체류 지점 추출)
     const placeVisits = await extractPlaceVisits(locations, timelineId, userId)
     if (placeVisits.length > 0) {
-      const { error: placeError } = await supabase
+      const { error: placeError } = await adminSupabase
         .from('place_visits')
         .insert(placeVisits)
       

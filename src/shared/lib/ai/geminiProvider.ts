@@ -571,6 +571,15 @@ ${currentContent.length > 2000 ? currentContent.substring(currentContent.length 
       question = '이곳에서 어떤 행동을 취하시겠습니까?'
     }
     
+    // 선택지가 2개만 생성된 경우 3번째 선택지 추가
+    if (choices.length === 2) {
+      choices.push({
+        id: `choice_${locationIndex}_2`,
+        text: '신중하게 더 생각해보기',
+        description: '상황을 좀 더 분석하고 판단하기'
+      })
+    }
+    
     if (choices.length === 0) {
       // AI가 선택지를 제대로 생성하지 못한 경우 기본 선택지 제공
       choices.push(
@@ -591,6 +600,11 @@ ${currentContent.length > 2000 ? currentContent.substring(currentContent.length 
         }
       )
     }
+    
+    console.log(`파싱된 선택지 수: ${choices.length}개`)
+    choices.forEach((choice, index) => {
+      console.log(`선택지 ${index + 1}: ${choice.text}`)
+    })
     
     return {
       id: `question_${locationIndex}`,

@@ -68,21 +68,29 @@ export function StoryReaderOriginal({ storyId }: StoryReaderProps) {
   const [interactiveChoices, setInteractiveChoices] = useState<InteractiveChoice[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingContent, setIsLoadingContent] = useState(false)
+  const [hasFetched, setHasFetched] = useState(false)
 
   useEffect(() => {
     const fetchStory = async () => {
+      if (hasFetched) return // Prevent duplicate calls
+      
       try {
         setIsLoading(true)
+        setHasFetched(true)
         // API를 통해 스토리 메타데이터 가져오기
         const response = await fetch(`/api/stories/${storyId}`)
         if (!response.ok) {
           throw new Error('Failed to fetch story')
         }
         
-        const { story: storyData, content, choices } = await response.json()
+        const { success, data } = await response.json()
+        if (!success) {
+          throw new Error(data?.error || 'Failed to fetch story')
+        }
+        const { content, ai_choices, ...storyData } = data
         setStory(storyData)
         setStoryContent(content || '')
-        setInteractiveChoices(choices || [])
+        setInteractiveChoices(ai_choices || [])
       } catch (error) {
         console.error('Error fetching story:', error)
         toast({
@@ -96,7 +104,7 @@ export function StoryReaderOriginal({ storyId }: StoryReaderProps) {
     }
 
     fetchStory()
-  }, [storyId, toast])
+  }, [storyId, toast, hasFetched])
 
   const handleBack = () => {
     router.push('/my-stories')

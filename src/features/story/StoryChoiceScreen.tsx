@@ -335,11 +335,19 @@ export function StoryChoiceScreen({
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
-                            <div className="font-medium text-gray-900 mb-1">
+                            <div className={`mb-1 ${
+                              isSelected 
+                                ? 'font-bold text-gray-900' 
+                                : 'font-medium text-gray-900'
+                            }`}>
                               {choice.text}
                             </div>
                             {choice.description && (
-                              <div className="text-sm text-gray-600">
+                              <div className={`text-sm ${
+                                isSelected 
+                                  ? 'text-gray-700 font-medium' 
+                                  : 'text-gray-600'
+                              }`}>
                                 {choice.description}
                               </div>
                             )}

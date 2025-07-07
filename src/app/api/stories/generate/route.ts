@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/supabase/server'
+import { createClient, createPureClient } from '@/supabase/server'
 import { getAIProvider } from '@/shared/lib/ai'
 import { 
   validateStoryPreferences, 
@@ -75,8 +75,9 @@ export async function POST(request: NextRequest) {
       }, { status: 429 })
     }
 
-    // 5. 백그라운드 작업 생성
-    const { data: jobData, error: jobError } = await supabase
+    // 5. 백그라운드 작업 생성 (Service Role 사용)
+    const adminSupabase = await createPureClient()
+    const { data: jobData, error: jobError } = await adminSupabase
       .from('generation_jobs')
       .insert({
         user_id: user.id,
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
       const aiProviderInstance = getAIProvider(aiProvider)
       
       // 6.1 백그라운드 작업 상태 업데이트
-      await supabase
+      await adminSupabase
         .from('generation_jobs')
         .update({ 
           status: 'processing',
@@ -158,7 +159,9 @@ export async function POST(request: NextRequest) {
         title: storyTitle
       })
       
-      // 7.1 생성된 소설 DB 저장
+      // 7.1 생성된 소설 DB 저장 (Service Role 사용하여 RLS 우회)
+      // adminSupabase는 이미 위에서 생성됨
+      
       const storyInsertData: any = {
         user_id: user.id,
         title: storyTitle,
@@ -182,8 +185,8 @@ export async function POST(request: NextRequest) {
       let finalTimelineId = timelineId
       
       if (!timelineId) {
-        // 인터랙티브 스토리용 임시 timeline 생성
-        const { data: tempTimeline, error: timelineError } = await supabase
+        // 인터랙티브 스토리용 임시 timeline 생성 (Service Role 사용)
+        const { data: tempTimeline, error: timelineError } = await adminSupabase
           .from('timelines')
           .insert({
             user_id: user.id,
@@ -231,7 +234,8 @@ export async function POST(request: NextRequest) {
       
       storyInsertData.timeline_id = finalTimelineId
 
-      const { data: storyData, error: storyError } = await supabase
+      // Service Role을 사용하여 RLS 우회한 스토리 저장
+      const { data: storyData, error: storyError } = await adminSupabase
         .from('stories')
         .insert(storyInsertData)
         .select()
@@ -242,11 +246,11 @@ export async function POST(request: NextRequest) {
         throw new Error('소설 저장에 실패했습니다.')
       }
 
-      // 8. AI 프롬프트 로그 저장
+      // 8. AI 프롬프트 로그 저장 (Service Role 사용)
       if (aiResponse.tokenUsage) {
         const tokenCost = calculateTokenCost(aiResponse.tokenUsage, aiProvider)
         
-        await supabase
+        await adminSupabase
           .from('ai_prompts')
           .insert({
             story_id: storyData.id,
@@ -261,7 +265,7 @@ export async function POST(request: NextRequest) {
       }
 
       // 9. 백그라운드 작업 완료 처리
-      await supabase
+      await adminSupabase
         .from('generation_jobs')
         .update({
           status: 'completed',
@@ -293,7 +297,7 @@ export async function POST(request: NextRequest) {
       // AI 생성 실패 시 백그라운드 작업으로 전환
       console.error('Immediate generation failed, falling back to background:', aiError)
       
-      await supabase
+      await adminSupabase
         .from('generation_jobs')
         .update({
           status: 'failed',

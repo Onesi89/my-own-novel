@@ -52,7 +52,7 @@ export async function GET(
     if (story.file_path) {
       try {
         const { data, error: downloadError } = await supabase.storage
-          .from('stories')  // 실제 bucket 이름으로 변경
+          .from('my-own-novel')  // 실제 bucket 이름으로 수정
           .download(story.file_path)
         
         if (downloadError) {

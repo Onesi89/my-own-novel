@@ -4,7 +4,7 @@
  */
 
 import { Suspense } from 'react'
-import { CreateStoryClientComposed } from '@/widgets/main/CreateStoryClientComposed'
+import { CreateStoryClientOriginal } from '@/widgets/main/CreateStoryClientOriginal'
 
 export default function CreateStoryPage() {
   return (
@@ -17,7 +17,7 @@ export default function CreateStoryPage() {
           </div>
         </div>
       }>
-        <CreateStoryClientComposed />
+        <CreateStoryClientOriginal />
       </Suspense>
     </div>
   )

@@ -30,7 +30,8 @@
       "Bash(rm:*)",
       "Bash(npx tsc:*)",
       "Bash(timeout:*)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(pnpm run:*)"
     ],
     "deny": []
   }

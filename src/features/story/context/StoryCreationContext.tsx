@@ -26,6 +26,9 @@ export interface ModalStates {
   isInlineStorySetupOpen: boolean
   isInteractiveStoryOpen: boolean
   isRouteConfirmOpen: boolean
+  isDirectMapSelectionOpen: boolean  // 지도에서 직접 경로 그리기
+  isTimelineUploadOpen: boolean      // Google 타임라인 업로드
+  isMapSelectorOpen: boolean         // 업로드된 타임라인에서 경로 선택
 }
 
 // 스토리 생성 상태
@@ -71,6 +74,9 @@ const initialState: StoryCreationState = {
     isInlineStorySetupOpen: false,
     isInteractiveStoryOpen: false,
     isRouteConfirmOpen: false,
+    isDirectMapSelectionOpen: false,
+    isTimelineUploadOpen: false,
+    isMapSelectorOpen: false,
   },
   selectedRoutes: [],
   storySettings: null,

@@ -6,7 +6,7 @@
 import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/supabase/server'
-import { StoryReaderComposed } from './StoryReaderComposed'
+import { StoryReaderOriginal } from '@/app/stories/[storyId]/StoryReaderOriginal'
 
 interface PageProps {
   params: Promise<{ storyId: string }>
@@ -56,5 +56,5 @@ export default async function StoryPage({ params }: PageProps) {
     notFound()
   }
   
-  return <StoryReaderComposed storyId={storyId} />
+  return <StoryReaderOriginal storyId={storyId} />
 }

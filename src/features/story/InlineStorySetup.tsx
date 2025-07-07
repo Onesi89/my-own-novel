@@ -71,6 +71,8 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
   const [selectedGenre, setSelectedGenre] = useState<StoryGenre | null>(null)
   const [selectedStyle, setSelectedStyle] = useState<StoryStyle | null>(null)
   const [showChoices, setShowChoices] = useState(false)
+  const [showSubtitle, setShowSubtitle] = useState(false)
+  const [selectedCard, setSelectedCard] = useState<string | null>(null)
 
   // 타이핑 효과
   const genreQuestion = "이 소설의 장르는 무엇입니까?"
@@ -85,21 +87,33 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
   useEffect(() => {
     let timer: NodeJS.Timeout
     if (step === 'genre' && genreTypewriter.isComplete) {
-      timer = setTimeout(() => setShowChoices(true), 800)
+      timer = setTimeout(() => {
+        setShowSubtitle(true)
+        setTimeout(() => setShowChoices(true), 400)
+      }, 800)
     } else if (step === 'style' && styleTypewriter.isComplete) {
-      timer = setTimeout(() => setShowChoices(true), 800)
+      timer = setTimeout(() => {
+        setShowSubtitle(true)
+        setTimeout(() => setShowChoices(true), 400)
+      }, 800)
     }
     return () => clearTimeout(timer)
   }, [step, genreTypewriter.isComplete, styleTypewriter.isComplete])
 
   const handleGenreSelect = (genre: StoryGenre) => {
     setSelectedGenre(genre)
+    setSelectedCard(genre)
     setShowChoices(false)
     
     setTimeout(() => {
       setStep('style')
-      setTimeout(() => setShowChoices(true), 1000)
-    }, 500)
+      setShowSubtitle(false)
+      setSelectedCard(null)
+      setTimeout(() => {
+        setShowSubtitle(true)
+        setTimeout(() => setShowChoices(true), 400)
+      }, 800)
+    }, 1200)
   }
 
   // 선택된 장르에 따른 색상 가져오기
@@ -107,17 +121,20 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
 
   const handleStyleSelect = (style: StoryStyle) => {
     setSelectedStyle(style)
+    setSelectedCard(style)
     setShowChoices(false)
     
     setTimeout(() => {
       setStep('start')
+      setShowSubtitle(false)
+      setSelectedCard(null)
       setTimeout(() => {
         onComplete({
           genre: selectedGenre!,
           style
         })
       }, 2000)
-    }, 500)
+    }, 1200)
   }
 
   return (
@@ -219,20 +236,32 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                   )}
                 </AnimatePresence>
                 
-                <motion.p 
-                  className="text-lg md:text-xl text-gray-600 mb-16 font-light"
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.5, duration: 0.8 }}
-                >
-                  {routesCount}개의 장소를 바탕으로 어떤 이야기를 만들어드릴까요?
-                </motion.p>
+                <AnimatePresence>
+                  {showSubtitle && (
+                    <motion.p 
+                      className="text-lg md:text-xl text-gray-600 mb-16 font-light"
+                      initial={{ y: 20, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -20, opacity: 0 }}
+                      transition={{ duration: 0.8 }}
+                    >
+                      {routesCount}개의 장소를 바탕으로 어떤 이야기를 만들어드릴까요?
+                    </motion.p>
+                  )}
+                </AnimatePresence>
 
                 <AnimatePresence>
                   {showChoices && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
+                    <motion.div 
+                      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.4 }}
+                    >
                       {GENRES.map((genre, index) => {
-                        const isSelected = selectedGenre === genre.key
+                        const isSelected = selectedCard === genre.key
+                        const isOtherSelected = selectedCard && selectedCard !== genre.key
                         const genreAnimation = getGenreAnimation(genre.key)
                         
                         return (
@@ -240,7 +269,7 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                           key={genre.key}
                           className={`p-8 border rounded-lg transition-all duration-300 text-left group ${
                             isSelected 
-                              ? 'border-gray-300 shadow-lg bg-white' 
+                              ? 'border-gray-300 shadow-lg bg-white relative z-10' 
                               : 'bg-white/80 border-gray-200 hover:bg-white hover:border-gray-300 hover:shadow-md'
                           }`}
                           style={{
@@ -250,9 +279,27 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                           }}
                           onClick={() => handleGenreSelect(genre.key)}
                           initial={{ y: 30, opacity: 0 }}
-                          animate={{ y: 0, opacity: 1 }}
-                          transition={{ delay: index * 0.1, duration: 0.6 }}
-                          whileHover={{ scale: 1.02, y: -4 }}
+                          animate={{ 
+                            y: 0, 
+                            opacity: isOtherSelected ? 0 : 1,
+                            scale: isOtherSelected ? 0.8 : isSelected ? 1.05 : 1,
+                            filter: isOtherSelected ? 'blur(4px)' : 'blur(0px)',
+                            x: isSelected ? 'calc(50vw - 50%)' : 0
+                          }}
+                          exit={{ 
+                            opacity: 0, 
+                            scale: 0.8,
+                            transition: { duration: 0.3 }
+                          }}
+                          transition={{ 
+                            delay: index * 0.1, 
+                            duration: 0.6,
+                            opacity: { duration: isOtherSelected ? 0.5 : 0.6 },
+                            scale: { duration: 0.5 },
+                            filter: { duration: 0.5 },
+                            x: { duration: 0.8, ease: "easeInOut" }
+                          }}
+                          whileHover={!selectedCard ? { scale: 1.02, y: -4 } : {}}
                           whileTap={{ scale: 0.98 }}
                         >
                           <h3 className="text-xl font-medium mb-3 text-gray-800 group-hover:text-gray-900">
@@ -264,7 +311,7 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                         </motion.button>
                         )
                       })}
-                    </div>
+                    </motion.div>
                   )}
                 </AnimatePresence>
               </motion.div>
@@ -331,22 +378,41 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                   </AnimatePresence>
                 </div>
                 
-                <motion.p 
-                  className="text-lg md:text-xl text-gray-600 mb-16 font-light"
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.5, duration: 0.8 }}
-                >
-                  어떤 시점에서 이야기를 들려드릴까요?
-                </motion.p>
+                <AnimatePresence>
+                  {showSubtitle && (
+                    <motion.p 
+                      className="text-lg md:text-xl text-gray-600 mb-16 font-light"
+                      initial={{ y: 20, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -20, opacity: 0 }}
+                      transition={{ duration: 0.8 }}
+                    >
+                      어떤 시점에서 이야기를 들려드릴까요?
+                    </motion.p>
+                  )}
+                </AnimatePresence>
 
                 <AnimatePresence>
                   {showChoices && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
-                      {STYLES.map((style, index) => (
+                    <motion.div 
+                      className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.4 }}
+                    >
+                      {STYLES.map((style, index) => {
+                        const isSelected = selectedCard === style.key
+                        const isOtherSelected = selectedCard && selectedCard !== style.key
+                        
+                        return (
                         <motion.button
                           key={style.key}
-                          className="p-10 border rounded-lg transition-all duration-300 text-center group bg-white/80 border-gray-200 hover:bg-white hover:border-gray-300 hover:shadow-md"
+                          className={`p-10 border rounded-lg transition-all duration-300 text-center group relative ${
+                            isSelected 
+                              ? 'border-gray-300 shadow-lg bg-white z-10' 
+                              : 'bg-white/80 border-gray-200 hover:bg-white hover:border-gray-300 hover:shadow-md'
+                          }`}
                           style={{
                             background: genreColors 
                               ? `linear-gradient(135deg, ${genreColors.primaryColor}06, #ffffff)` 
@@ -354,12 +420,30 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                           }}
                           onClick={() => handleStyleSelect(style.key)}
                           initial={{ y: 30, opacity: 0 }}
-                          animate={{ y: 0, opacity: 1 }}
-                          transition={{ delay: index * 0.2, duration: 0.6 }}
-                          whileHover={{ 
+                          animate={{ 
+                            y: 0, 
+                            opacity: isOtherSelected ? 0 : 1,
+                            scale: isOtherSelected ? 0.8 : isSelected ? 1.05 : 1,
+                            filter: isOtherSelected ? 'blur(4px)' : 'blur(0px)',
+                            x: isSelected ? 'calc(50vw - 50%)' : 0
+                          }}
+                          exit={{ 
+                            opacity: 0, 
+                            scale: 0.8,
+                            transition: { duration: 0.3 }
+                          }}
+                          transition={{ 
+                            delay: index * 0.2, 
+                            duration: 0.6,
+                            opacity: { duration: isOtherSelected ? 0.5 : 0.6 },
+                            scale: { duration: 0.5 },
+                            filter: { duration: 0.5 },
+                            x: { duration: 0.8, ease: "easeInOut" }
+                          }}
+                          whileHover={!selectedCard ? { 
                             scale: 1.02, 
                             y: -4
-                          }}
+                          } : {}}
                           whileTap={{ scale: 0.98 }}
                         >
                           <h3 className="text-2xl font-medium mb-4 text-gray-800 group-hover:text-gray-900">
@@ -369,8 +453,9 @@ export function InlineStorySetup({ routesCount, onComplete, onBack }: InlineStor
                             {style.description}
                           </p>
                         </motion.button>
-                      ))}
-                    </div>
+                        )
+                      })}
+                    </motion.div>
                   )}
                 </AnimatePresence>
               </motion.div>

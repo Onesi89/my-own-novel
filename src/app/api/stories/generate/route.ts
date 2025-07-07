@@ -13,6 +13,7 @@ import {
   calculateTokenCost,
   retryWithBackoff
 } from '@/shared/lib/ai'
+import { sanitizeJson } from '@/shared/lib/validation/inputValidation'
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -30,7 +31,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. 요청 데이터 파싱 및 검증
-    const body = await request.json()
+    const rawBody = await request.json()
+    const body = sanitizeJson(rawBody)
     const { selectedRoutes, preferences, timelineId, aiProvider = 'gemini' } = body
 
     if (!selectedRoutes || !preferences) {
@@ -131,10 +133,10 @@ export async function POST(request: NextRequest) {
       const storyContent = aiResponse.data?.content || ''
       const storyTitle = storyContent.split('\n')[0].replace('#', '').trim() || '제목 없는 소설'
       
-      // 파일명 생성 (안전한 파일명으로 변환)
-      const safeFileName = storyTitle.replace(/[^a-zA-Z0-9가-힣\s]/g, '').trim().replace(/\s+/g, '_')
+      // 파일명 생성 (UUID 사용)
+      const uniqueId = crypto.randomUUID()
       const timestamp = Date.now()
-      const fileName = `${safeFileName}_${timestamp}.md`
+      const fileName = `story_${uniqueId}_${timestamp}.md`
       const storagePath = `${user.id}/${fileName}`
       
       // Supabase Storage에 파일 업로드

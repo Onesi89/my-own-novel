@@ -11,7 +11,7 @@ import {
   MapPin, 
   Sparkles
 } from 'lucide-react'
-import { MainDashboardClient } from './MainDashboardClient'
+import { MainDashboardComposed } from './MainDashboardComposed'
 import { UserMenu } from './UserMenu'
 
 export function MainDashboardServer() {
@@ -72,7 +72,7 @@ export function MainDashboardServer() {
               </div>
             </div>
           }>
-            <MainDashboardClient />
+            <MainDashboardComposed />
           </Suspense>
         </div>
       </main>

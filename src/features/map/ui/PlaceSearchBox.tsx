@@ -24,6 +24,7 @@ import {
   Badge
 } from '@/shared/ui'
 import { getPlacesService, PlaceAutocompleteResult } from '../api/placesService'
+import { sanitizeSearchQuery, INPUT_LIMITS } from '@/shared/lib/validation/inputValidation'
 
 interface PlaceSearchResult {
   placeId: string
@@ -197,7 +198,9 @@ export function PlaceSearchBox({
 
   // 입력값 변경
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
+    const rawValue = e.target.value
+    // 검색어 검증 및 제한
+    const value = sanitizeSearchQuery(rawValue)
     setSearchValue(value)
     setShowSuggestions(true)
     setForceShowSuggestions(true)
@@ -364,6 +367,7 @@ export function PlaceSearchBox({
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
         <Input
           ref={inputRef}
+          maxLength={INPUT_LIMITS.SEARCH_QUERY}
           type="text"
           placeholder={placeholder}
           value={searchValue}

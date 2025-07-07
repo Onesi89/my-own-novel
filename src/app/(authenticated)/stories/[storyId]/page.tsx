@@ -6,7 +6,7 @@
 import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/supabase/server'
-import { StoryReader } from './StoryReader'
+import { StoryReaderComposed } from './StoryReaderComposed'
 
 interface PageProps {
   params: Promise<{ storyId: string }>
@@ -38,15 +38,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function StoryPage({ params }: PageProps) {
   const { storyId } = await params
   
-  // 서버에서 사용자 인증 확인
+  // 스토리 존재 여부 확인 (인증은 layout에서 이미 처리됨)
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) {
-    notFound()
+    notFound() // 이론적으로 layout에서 이미 막혔어야 하지만 안전장치
   }
-  
-  // 스토리 존재 여부 확인
   const { data: story } = await supabase
     .from('stories')
     .select('id, user_id')
@@ -58,5 +56,5 @@ export default async function StoryPage({ params }: PageProps) {
     notFound()
   }
   
-  return <StoryReader storyId={storyId} />
+  return <StoryReaderComposed storyId={storyId} />
 }

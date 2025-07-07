@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/supabase/server'
 import { getAIProvider } from '@/shared/lib/ai'
+import { sanitizeInput, sanitizeJson } from '@/shared/lib/validation/inputValidation'
 
 export async function POST(
   request: NextRequest,
@@ -23,8 +24,12 @@ export async function POST(
     }
 
     const { storyId } = await params
-    const body = await request.json()
+    const rawBody = await request.json()
+    const body = sanitizeJson(rawBody)
     const { choiceId, selectedOption } = body
+    
+    // storyId 검증
+    const sanitizedStoryId = sanitizeInput(storyId, 50)
 
     if (!storyId || !choiceId || !selectedOption) {
       return NextResponse.json({
@@ -37,7 +42,7 @@ export async function POST(
     const { data: story, error: storyError } = await supabase
       .from('stories')
       .select('*')
-      .eq('id', storyId)
+      .eq('id', sanitizedStoryId)
       .eq('user_id', user.id)
       .single()
 

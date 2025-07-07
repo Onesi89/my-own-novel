@@ -4,12 +4,14 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { GeminiProvider } from '@/shared/lib/ai/geminiProvider'
+import { sanitizeJson } from '@/shared/lib/validation/inputValidation'
 
 export async function POST(request: NextRequest) {
   try {
     console.log('API 라우트 호출됨')
     
-    const requestData = await request.json()
+    const rawData = await request.json()
+    const requestData = sanitizeJson(rawData)
     console.log('요청 데이터:', {
       hasRoute: !!requestData.route,
       settings: requestData.settings,

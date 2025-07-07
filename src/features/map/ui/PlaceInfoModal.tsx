@@ -10,8 +10,6 @@
 import React, { useState, useEffect } from 'react'
 import { 
   MapPin, 
-  Tag, 
-  FileText, 
   Home, 
   Briefcase, 
   ShoppingCart,
@@ -39,6 +37,11 @@ import {
   Alert,
   AlertDescription
 } from '@/shared/ui'
+import { 
+  sanitizeInput, 
+  validateLength, 
+  INPUT_LIMITS 
+} from '@/shared/lib/validation/inputValidation'
 
 interface PlaceInfo {
   customName?: string
@@ -171,14 +174,14 @@ export function PlaceInfoModal({
     
     const placeInfo = {
       ...formData,
-      customName: formData.customName?.trim(),
-      description: formData.description?.trim(),
-      storyHint: formData.storyHint?.trim()
+      customName: sanitizeInput(formData.customName || '', INPUT_LIMITS.LOCATION_NAME),
+      description: sanitizeInput(formData.description || '', INPUT_LIMITS.LOCATION_DESCRIPTION),
+      storyHint: sanitizeInput(formData.storyHint || '', INPUT_LIMITS.STORY_HINT)
     }
     
     const timeData = formData.visitTime ? {
       visitTime: formatInputToISO(formData.visitTime),
-      duration: formData.duration || 30
+      duration: Math.min(Math.max(formData.duration || 30, 1), 1440) // 1분~24시간 제한
     } : undefined
     
     onSave(placeInfo, timeData)
@@ -279,11 +282,13 @@ export function PlaceInfoModal({
               id="placeName"
               value={formData.customName}
               onChange={(e) => {
-                setFormData(prev => ({ ...prev, customName: e.target.value }))
+                const value = validateLength(e.target.value, INPUT_LIMITS.LOCATION_NAME)
+                setFormData(prev => ({ ...prev, customName: value }))
                 setErrors(prev => ({ ...prev, customName: '' }))
               }}
               placeholder="예: 우리 집, 회사, 카페 등"
               className={errors.customName ? 'border-red-500' : ''}
+              maxLength={INPUT_LIMITS.LOCATION_NAME}
             />
             {errors.customName && (
               <p className="text-xs text-red-500 flex items-center gap-1">
@@ -291,6 +296,9 @@ export function PlaceInfoModal({
                 {errors.customName}
               </p>
             )}
+            <p className="text-xs text-gray-500 text-right">
+              {formData.customName?.length || 0}/{INPUT_LIMITS.LOCATION_NAME}
+            </p>
           </div>
 
           {/* 장소 종류 선택 */}
@@ -380,11 +388,13 @@ export function PlaceInfoModal({
               id="description"
               value={formData.description}
               onChange={(e) => {
-                setFormData(prev => ({ ...prev, description: e.target.value }))
+                const value = validateLength(e.target.value, INPUT_LIMITS.LOCATION_DESCRIPTION)
+                setFormData(prev => ({ ...prev, description: value }))
                 setErrors(prev => ({ ...prev, description: '' }))
               }}
               placeholder="이 장소에서 일어난 일이나 특별한 상황을 자세히 설명해주세요 (최소 10글자)"
               className={`min-h-[80px] ${errors.description ? 'border-red-500' : ''}`}
+              maxLength={INPUT_LIMITS.LOCATION_DESCRIPTION}
             />
             {errors.description && (
               <p className="text-xs text-red-500 flex items-center gap-1">
@@ -392,6 +402,9 @@ export function PlaceInfoModal({
                 {errors.description}
               </p>
             )}
+            <p className="text-xs text-gray-500 text-right">
+              {formData.description?.length || 0}/{INPUT_LIMITS.LOCATION_DESCRIPTION}
+            </p>
           </div>
 
           {/* 스토리 힌트 */}
@@ -416,11 +429,13 @@ export function PlaceInfoModal({
               <Input
                 value={formData.storyHint}
                 onChange={(e) => {
-                  setFormData(prev => ({ ...prev, storyHint: e.target.value }))
+                  const value = validateLength(e.target.value, INPUT_LIMITS.STORY_HINT)
+                  setFormData(prev => ({ ...prev, storyHint: value }))
                   setErrors(prev => ({ ...prev, storyHint: '' }))
                 }}
                 placeholder="또는 직접 입력하세요 (최소 5글자)"
                 className={`text-sm ${errors.storyHint ? 'border-red-500' : ''}`}
+                maxLength={INPUT_LIMITS.STORY_HINT}
               />
               {errors.storyHint && (
                 <p className="text-xs text-red-500 flex items-center gap-1">
@@ -428,6 +443,9 @@ export function PlaceInfoModal({
                   {errors.storyHint}
                 </p>
               )}
+              <p className="text-xs text-gray-500 text-right">
+                {formData.storyHint?.length || 0}/{INPUT_LIMITS.STORY_HINT}
+              </p>
             </div>
           </div>
 

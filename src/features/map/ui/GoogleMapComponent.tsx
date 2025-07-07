@@ -27,7 +27,7 @@ import {
   Card,
   CardContent
 } from '@/shared/ui'
-import { PlaceInfoModal } from './PlaceInfoModal'
+import { PlaceInfoModalComposed } from '@/widgets/main/PlaceInfoModalComposed'
 
 interface RoutePoint {
   id: string
@@ -403,7 +403,7 @@ export function GoogleMapComponent({
       </div>
 
       {/* 장소 정보 편집 모달 */}
-      <PlaceInfoModal
+      <PlaceInfoModalComposed
         isOpen={isPlaceModalOpen}
         onClose={() => {
           setIsPlaceModalOpen(false)

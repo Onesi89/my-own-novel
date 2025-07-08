@@ -71,7 +71,7 @@ export class OptimizedAIService {
     routes: RouteContext[],
     preferences: StoryPreferences,
     userId?: string
-  ): Promise<OptimizedAIResponse> {
+  ): Promise<any> {
     const startTime = Date.now()
     let originalTokens = 0
     let finalTokens = 0
@@ -80,7 +80,7 @@ export class OptimizedAIService {
     let costSaved = 0
     let compressionRatio = 0
     let choicesLimited = false
-    let provider = this.selectProvider(preferences)
+    const provider = this.selectProvider(preferences)
 
     try {
       // 1. 프롬프트 생성
@@ -99,7 +99,12 @@ export class OptimizedAIService {
           costSaved = this.estimateCost(tokensSaved, provider)
           
           return {
-            ...cachedResponse,
+            success: true,
+            data: {
+              content: cachedResponse.content,
+              choices: cachedResponse.choices
+            },
+            tokenUsage: cachedResponse.tokenUsage,
             optimization: {
               cacheHit,
               tokensSaved,
@@ -110,7 +115,7 @@ export class OptimizedAIService {
               finalTokens: cachedResponse.tokenUsage.total,
               provider
             }
-          } as OptimizedAIResponse
+          }
         }
       }
 
@@ -164,7 +169,16 @@ export class OptimizedAIService {
       costSaved = this.estimateCost(tokensSaved, provider)
       
       return {
-        ...aiResponse,
+        success: true,
+        data: {
+          content: aiResponse.content || aiResponse.data?.content,
+          choices: aiResponse.choices || aiResponse.data?.choices || []
+        },
+        tokenUsage: aiResponse.tokenUsage || {
+          prompt: finalTokens,
+          completion: 0,
+          total: finalTokens
+        },
         optimization: {
           cacheHit,
           tokensSaved,
@@ -175,7 +189,7 @@ export class OptimizedAIService {
           finalTokens,
           provider
         }
-      } as OptimizedAIResponse
+      }
 
     } catch (error) {
       console.error('OptimizedAIService error:', error)
@@ -200,44 +214,50 @@ ${context}
   }
 
   private selectProvider(preferences: StoryPreferences): 'gemini' | 'claude' {
-    if (this.config.cost?.preferredProvider && this.config.cost.preferredProvider !== 'auto') {
-      return this.config.cost.preferredProvider
-    }
-
-    // 자동 선택 로직
-    const genre = preferences.genre?.toLowerCase()
-    const style = preferences.style?.toLowerCase()
-
-    // 판타지/SF는 Claude가 더 창의적
-    if (genre?.includes('판타지') || genre?.includes('sf') || genre?.includes('공상과학')) {
-      return 'claude'
-    }
-
-    // 현실적/로맨스는 Gemini가 더 자연스러움
-    if (style?.includes('현실') || genre?.includes('로맨스')) {
-      return 'gemini'
-    }
-
-    // 기본값: 비용이 저렴한 Gemini
+    // 현재는 Gemini만 사용
     return 'gemini'
   }
 
   private async callAIProvider(prompt: string, provider: 'gemini' | 'claude'): Promise<any> {
+    // Parse context from structured prompt
+    const routesMatch = prompt.match(/지금까지의 이야기:\n([\s\S]*?)(?=\n\n다음|$)/)
+    const genreMatch = prompt.match(/장르:\s*(.+)/)
+    const styleMatch = prompt.match(/스타일:\s*(.+)/)
+    const moodMatch = prompt.match(/분위기:\s*(.+)/)
+    
+    const parsedRoutes: RouteContext[] = []
+    if (routesMatch && routesMatch[1]) {
+      const routeLines = routesMatch[1].split('\n').filter(line => line.trim())
+      routeLines.forEach((line, index) => {
+        const storyMatch = line.match(/\d+\.\s*(.+?)(?=\s*선택:|$)/)
+        const choiceMatch = line.match(/선택:\s*(.+)/)
+        if (storyMatch) {
+          parsedRoutes.push({
+            id: `route-${index}`,
+            address: storyMatch[1].trim(),
+            timestamp: new Date().toISOString(),
+            story: storyMatch[1].trim(),
+            choice: choiceMatch ? choiceMatch[1].trim() : undefined
+          })
+        }
+      })
+    }
+    
+    const context = {
+      routes: parsedRoutes,
+      preferences: {
+        genre: (genreMatch?.[1] || 'adventure') as any,
+        style: (styleMatch?.[1] || 'first_person') as any,
+        tone: (moodMatch?.[1] || 'adventurous') as any,
+        length: 5000 as const
+      }
+    }
+
     if (provider === 'claude') {
       const claudeProvider = new ClaudeProvider(process.env.CLAUDE_API_KEY)
-      // Convert prompt to simple story generation context
-      const context = {
-        routes: [], // Will be filled by actual implementation
-        preferences: { genre: 'adventure' as const, style: 'first_person' as const, tone: 'adventurous' as const, length: 5000 as const }
-      }
       return await claudeProvider.generateStory(context)
     } else {
       const geminiProvider = new GeminiProvider(process.env.GEMINI_API_KEY)
-      // Convert prompt to simple story generation context
-      const context = {
-        routes: [], // Will be filled by actual implementation
-        preferences: { genre: 'adventure' as const, style: 'first_person' as const, tone: 'adventurous' as const, length: 5000 as const }
-      }
       return await geminiProvider.generateStory(context)
     }
   }
@@ -247,8 +267,49 @@ ${context}
     preferences: StoryPreferences, 
     provider: string
   ): string {
-    const key = `${provider}:${preferences.genre || ''}:${preferences.style || ''}:${prompt}`
+    // 핵심 요소들만 추출해서 캐시 키 생성
+    const normalizedPrompt = this.normalizePrompt(prompt)
+    const contextHash = this.extractContextHash(prompt)
+    
+    const key = [
+      provider,
+      preferences.genre || 'default',
+      preferences.style || 'default', 
+      preferences.mood || 'default',
+      contextHash, // 이전 스토리 맥락의 해시
+      normalizedPrompt // 정규화된 프롬프트
+    ].join(':')
+    
     return this.hashString(key)
+  }
+
+  private normalizePrompt(prompt: string): string {
+    // 프롬프트에서 가변적인 부분 제거하고 핵심 구조만 추출
+    return prompt
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/, 'TIMESTAMP') // 타임스탬프 정규화
+      .replace(/route-\d+/g, 'ROUTE_ID') // 라우트 ID 정규화
+      .replace(/\s+/g, ' ') // 공백 정규화
+      .trim()
+  }
+
+  private extractContextHash(prompt: string): string {
+    // 이전 스토리 맥락 추출
+    const contextMatch = prompt.match(/지금까지의 이야기:\n([\s\S]*?)(?=\n\n|$)/)
+    if (!contextMatch) return 'no-context'
+    
+    const context = contextMatch[1]
+    // 스토리 순서와 선택지만 추출 (세부 내용은 제외)
+    const storyStructure = context
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        // "1. 이야기내용 → 선택: 선택내용" 형태에서 구조만 추출
+        const match = line.match(/(\d+)\.\s*(.{0,50}).*?선택:\s*(.{0,30})/)
+        return match ? `${match[1]}:${match[2].slice(0,20)}:${match[3].slice(0,15)}` : line.slice(0,30)
+      })
+      .join('|')
+    
+    return this.hashString(storyStructure)
   }
 
   private hashString(str: string): string {

@@ -7,9 +7,17 @@ import { AIResponse } from '../types'
 
 // Re-export types that might be in different modules
 export interface RouteContext {
-  story: string
+  id: string
+  address: string
+  timestamp: string
+  duration?: number
+  customInfo?: {
+    customName?: string
+    category: string
+    description?: string
+  }
+  story?: string
   choice?: string
-  id?: string
 }
 
 export interface StoryPreferences {

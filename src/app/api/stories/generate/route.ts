@@ -14,6 +14,7 @@ import {
   retryWithBackoff
 } from '@/shared/lib/ai'
 import { sanitizeJson } from '@/shared/lib/validation/inputValidation'
+import { createOptimizedAIService, PRODUCTION_CONFIG } from '@/shared/lib/ai/optimization'
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -113,12 +114,14 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', jobData.id)
 
-      // 6.2 AI 소설 생성 (재시도 로직 포함)
+      // 6.2 AI 소설 생성 (최적화 서비스 사용)
+      const optimizedAI = createOptimizedAIService(PRODUCTION_CONFIG)
       const aiResponse = await retryWithBackoff(async () => {
-        return await aiProviderInstance.generateStory({
-          routes: selectedRoutes,
-          preferences
-        })
+        return await optimizedAI.generateStory(
+          selectedRoutes,
+          preferences,
+          user.id
+        )
       }, 2, 1000)
 
       if (!aiResponse.success) {
@@ -129,6 +132,18 @@ export async function POST(request: NextRequest) {
       console.log('AI Response data:', aiResponse.data ? 'exists' : 'null')
       console.log('AI Response content length:', aiResponse.data?.content?.length || 0)
       console.log('AI Response content preview:', aiResponse.data?.content?.substring(0, 200) || 'No content')
+      
+      // 최적화 통계 로깅
+      if (aiResponse.optimization) {
+        console.log('Optimization stats:', {
+          cacheHit: aiResponse.optimization.cacheHit,
+          tokensSaved: aiResponse.optimization.tokensSaved,
+          costSaved: `$${aiResponse.optimization.costSaved.toFixed(4)}`,
+          compressionRatio: `${(aiResponse.optimization.compressionRatio * 100).toFixed(1)}%`,
+          choicesLimited: aiResponse.optimization.choicesLimited,
+          provider: aiResponse.optimization.provider
+        })
+      }
 
       // 7. 생성된 소설 Supabase Storage에 저장
       const storyContent = aiResponse.data?.content || ''
@@ -248,7 +263,8 @@ export async function POST(request: NextRequest) {
 
       // 8. AI 프롬프트 로그 저장 (Service Role 사용)
       if (aiResponse.tokenUsage) {
-        const tokenCost = calculateTokenCost(aiResponse.tokenUsage, aiProvider)
+        const provider = aiResponse.optimization?.provider || aiProvider
+        const tokenCost = calculateTokenCost(aiResponse.tokenUsage, provider)
         
         await adminSupabase
           .from('ai_prompts')
@@ -258,7 +274,8 @@ export async function POST(request: NextRequest) {
             prompt_text: `Genre: ${preferences.genre}, Routes: ${selectedRoutes.length}`,
             response_data: {
               content: aiResponse.data?.content.substring(0, 1000), // 일부만 저장
-              choices: aiResponse.data?.choices
+              choices: aiResponse.data?.choices,
+              optimization: aiResponse.optimization // 최적화 통계 저장
             },
             token_usage: aiResponse.tokenUsage.total
           })

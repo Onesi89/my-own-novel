@@ -35,7 +35,12 @@
       "Bash(npm run build:*)",
       "Bash(npx supabase:*)",
       "Bash(npx ts-node:*)",
-      "Bash(npm run type-check:*)"
+      "Bash(npm run type-check:*)",
+      "Bash(claude doctor)",
+      "Bash(npm i:*)",
+      "Bash(sudo npm i -g @anthropic-ai/claude-code)",
+      "Bash(npm run lint)",
+      "Bash(npm run:*)"
     ],
     "deny": []
   }

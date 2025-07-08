@@ -20,6 +20,7 @@ export class StructuredPromptGenerator {
     choiceLimit: number
   ): string {
     const maxChoices = choiceLimit || this.config.maxChoices
+    const genreMarker = this.getGenreMarker(preferences.genre)
     
     const prompt = `
 당신은 소설 작가입니다. 다음 조건에 맞는 이야기를 생성해주세요:
@@ -44,18 +45,27 @@ ${this.buildContextFromRoutes(routes)}
    - 각 선택지는 서로 다른 방향성
    - 독자의 호기심 유발
 
-## 응답 형식
-다음 형식으로 응답하세요:
+## 마크다운 형식 지시사항
+반드시 다음 마크다운 형식을 사용하여 응답하세요:
 
-**이야기 전개**
+### 이야기 전개
 [현재 상황에서 다음으로 일어날 수 있는 흥미로운 전개를 150-300자로 작성]
 
-**선택지**
-1. [첫 번째 선택지 - 50-200자]
-2. [두 번째 선택지 - 50-200자]
-${maxChoices === 3 ? '3. [세 번째 선택지 - 50-200자]' : ''}
+## ${genreMarker} 질문
+어떤 행동을 하시겠습니까?
 
-중요: 반드시 ${maxChoices}개의 선택지만 제공하고, 각 선택지는 명확하고 구체적이어야 합니다.
+### 선택지
+1. **선택지 제목** - 선택지 설명 (50-200자)
+2. **선택지 제목** - 선택지 설명 (50-200자)
+${maxChoices === 3 ? '3. **선택지 제목** - 선택지 설명 (50-200자)' : ''}
+
+### 이전 선택 (기존 선택이 있는 경우)
+${this.buildPreviousChoice(routes, genreMarker)}
+
+중요: 
+- 반드시 마크다운 형식을 정확히 따라주세요
+- 선택지는 **굵은 글씨**로 제목을 표시하고 설명을 추가하세요
+- 정확히 ${maxChoices}개의 선택지만 제공하세요
 `.trim()
 
     return prompt
@@ -119,5 +129,41 @@ ${maxChoices === 3 ? '3. [세 번째]' : ''}
       const choice = (route.choice || '').substring(0, 50)
       return `${story}→${choice}`
     }).join(' / ')
+  }
+
+  private getGenreMarker(genre?: string): string {
+    const markers = {
+      'SF': '🚀',
+      'romance': '💕',
+      'comedy': '😄', 
+      'mystery': '🔍',
+      'drama': '🎭',
+      'adventure': '⚔️',
+      'horror': '👻',
+      'fantasy': '🔮',
+      '판타지': '🔮',
+      '로맨스': '💕',
+      '코미디': '😄',
+      '미스터리': '🔍',
+      '드라마': '🎭',
+      '모험': '⚔️',
+      '공포': '👻',
+      '일반': '📖'
+    }
+    
+    return markers[genre || '일반'] || '📖'
+  }
+
+  private buildPreviousChoice(routes: RouteContext[], genreMarker: string): string {
+    if (!routes || routes.length === 0) {
+      return ''
+    }
+
+    const lastRoute = routes[routes.length - 1]
+    if (!lastRoute.choice) {
+      return ''
+    }
+
+    return `> ${genreMarker} **이전 선택: ${lastRoute.choice}**`
   }
 }

@@ -119,17 +119,9 @@ export class OptimizedAIService {
         }
       }
 
-      // 3. 프롬프트 압축
-      if (this.compressor) {
-        const targetReduction = this.config.compression?.targetReduction || 30
-        const compressed = await this.compressor.compress(prompt, targetReduction)
-        prompt = compressed.compressed
-        compressionRatio = compressed.compressionRatio
-        finalTokens = this.estimateTokens(prompt)
-        tokensSaved += compressed.tokensSaved
-      } else {
-        finalTokens = originalTokens
-      }
+      // 3. 프롬프트 압축 (소설 생성시에는 압축하지 않음)
+      // 소설 생성시에는 품질이 중요하므로 압축 비활성화
+      finalTokens = originalTokens
 
       // 4. 선택지 제한을 위한 구조화된 프롬프트 생성
       if (this.choiceStrategy) {
@@ -198,18 +190,40 @@ export class OptimizedAIService {
   }
 
   private generatePrompt(routes: RouteContext[], preferences: StoryPreferences): string {
-    // 기본 프롬프트 생성 로직
-    const context = routes.map(route => `${route.story} → ${route.choice || ''}`).join('\n')
+    // 구조화된 프롬프트 생성기를 사용하여 마크업 포함 프롬프트 생성
+    if (this.choiceStrategy) {
+      return this.choiceStrategy.generateStructuredPrompt(routes, preferences, 3)
+    }
+    
+    // 폴백: 기본 프롬프트 (마크업 포함)
+    const context = routes.map((route, index) => `${index + 1}. ${route.story || route.address} → ${route.choice || ''}`).join('\n')
+    const genreMarker = this.getGenreMarkerFallback(preferences.genre)
     
     return `
-장르: ${preferences.genre || '일반'}
-스타일: ${preferences.style || '현실적'}
-분위기: ${preferences.mood || '중립'}
+당신은 소설 작가입니다. 마크다운 형식으로 응답해주세요.
 
+## 스토리 설정
+- 장르: ${preferences.genre || '일반'}
+- 스타일: ${preferences.style || '현실적'}
+- 분위기: ${preferences.mood || '중립'}
+
+## 현재 스토리 맥락
 지금까지의 이야기:
 ${context}
 
-다음 이야기를 생성하고 3개의 선택지를 제공해주세요.
+## 마크다운 형식 응답
+### 이야기 전개
+[다음 전개를 150-300자로 작성]
+
+## ${genreMarker} 질문
+어떤 행동을 하시겠습니까?
+
+### 선택지
+1. **선택지 제목** - 선택지 설명
+2. **선택지 제목** - 선택지 설명  
+3. **선택지 제목** - 선택지 설명
+
+반드시 마크다운 형식을 사용하여 응답하세요.
     `.trim()
   }
 
@@ -359,5 +373,28 @@ ${context}
     if (this.cache) {
       await this.cache.clear()
     }
+  }
+
+  private getGenreMarkerFallback(genre?: string): string {
+    const markers = {
+      'SF': '🚀',
+      'romance': '💕',
+      'comedy': '😄', 
+      'mystery': '🔍',
+      'drama': '🎭',
+      'adventure': '⚔️',
+      'horror': '👻',
+      'fantasy': '🔮',
+      '판타지': '🔮',
+      '로맨스': '💕',
+      '코미디': '😄',
+      '미스터리': '🔍',
+      '드라마': '🎭',
+      '모험': '⚔️',
+      '공포': '👻',
+      '일반': '📖'
+    }
+    
+    return markers[genre || '일반'] || '📖'
   }
 }

@@ -328,7 +328,7 @@ export function InteractiveStoryFlow({
   const locationName = route.customInfo?.customName || route.address || `장소 ${currentLocationIndex + 1}`
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* 뒤로가기 버튼 */}
       <div className="absolute top-4 left-4 z-50">
         <Button

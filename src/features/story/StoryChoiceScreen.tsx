@@ -179,7 +179,7 @@ export function StoryChoiceScreen({
 
   return (
     <motion.div 
-      className="min-h-screen relative overflow-y-auto overflow-x-hidden"
+      className="min-h-screen relative"
       style={{
         background: `linear-gradient(135deg, ${genreConfig.primaryColor}15, ${genreConfig.secondaryColor}15)`
       }}

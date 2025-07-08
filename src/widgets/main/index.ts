@@ -1,4 +1,3 @@
-export { MainDashboard } from './MainDashboard';
 export { MainDashboardServer } from './MainDashboardServer';
 export { MainDashboardClient } from './MainDashboardClient';
 export { UserMenu } from './UserMenu';

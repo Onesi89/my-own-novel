@@ -8,6 +8,7 @@
 'use client'
 
 import React, { useState, useRef, useCallback, useEffect } from 'react'
+import { useDebouncedCallback } from 'use-debounce'
 import { 
   Search, 
   MapPin, 
@@ -58,77 +59,41 @@ export function PlaceSearchBox({
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isFocused, setIsFocused] = useState(false)
-  const [forceShowSuggestions, setForceShowSuggestions] = useState(false)
-  const [isSearching, setIsSearching] = useState(false)
   
   const inputRef = useRef<HTMLInputElement>(null)
-  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const suggestionsPanelRef = useRef<HTMLDivElement>(null)
-  const blurTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const isUserTypingRef = useRef(false)
 
   // 디바운스된 검색 함수
-  const debouncedSearch = useCallback(async (query: string) => {
+  const searchPlaces = useCallback(async (query: string) => {
     if (query.length < 2) {
       setSuggestions([])
-      setIsSearching(false)
       return
     }
 
     setIsLoading(true)
-    setIsSearching(true)
     setError(null)
-    setForceShowSuggestions(true) // 검색 시작 시 강제 표시
 
     try {
       const placesService = getPlacesService()
       const results = await placesService.autocomplete(query)
       setSuggestions(results)
-      
-      // 검색 완료 후에도 포커스와 suggestions 유지
-      if (isUserTypingRef.current || inputRef.current === document.activeElement) {
-        setShowSuggestions(true)
-        setForceShowSuggestions(true)
-      }
+      setShowSuggestions(true)
     } catch (err) {
       console.error('Search error:', err)
       setError('검색 중 오류가 발생했습니다.')
       setSuggestions([])
     } finally {
       setIsLoading(false)
-      setIsSearching(false)
     }
   }, [])
 
-  // 입력값 변경 시 디바운스 적용
+  // useDebouncedCallback 사용으로 debounce 간소화
+  const debouncedSearch = useDebouncedCallback(searchPlaces, 300)
+
+  // 검색어 변경 시 자동 검색
   useEffect(() => {
-    if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current)
-    }
-
-    debounceTimeoutRef.current = setTimeout(() => {
-      debouncedSearch(searchValue)
-    }, 300)
-
-    return () => {
-      if (debounceTimeoutRef.current) {
-        clearTimeout(debounceTimeoutRef.current)
-      }
-    }
+    debouncedSearch(searchValue)
   }, [searchValue, debouncedSearch])
-
-  // 컴포넌트 언마운트 시 타이머 정리
-  useEffect(() => {
-    return () => {
-      if (blurTimeoutRef.current) {
-        clearTimeout(blurTimeoutRef.current)
-      }
-      if (debounceTimeoutRef.current) {
-        clearTimeout(debounceTimeoutRef.current)
-      }
-    }
-  }, [])
 
   // 장소 선택 처리
   const handlePlaceSelect = async (autocompleteResult: PlaceAutocompleteResult) => {
@@ -166,25 +131,12 @@ export function PlaceSearchBox({
         )
       }
 
-      // 검색창 완전 초기화
+      // 검색창 초기화 (더 단순하게)
       setSearchValue('')
       setSuggestions([])
       setShowSuggestions(false)
-      setForceShowSuggestions(false)
-      setIsFocused(false)
-      setIsSearching(false)
-      isUserTypingRef.current = false
       
-      // 기존 타이머들 정리
-      if (blurTimeoutRef.current) {
-        clearTimeout(blurTimeoutRef.current)
-        blurTimeoutRef.current = null
-      }
-      if (debounceTimeoutRef.current) {
-        clearTimeout(debounceTimeoutRef.current)
-        debounceTimeoutRef.current = null
-      }
-      
+      // 입력 필드 포커스 해제
       if (inputRef.current) {
         inputRef.current.blur()
       }
@@ -199,33 +151,19 @@ export function PlaceSearchBox({
   // 입력값 변경
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value
-    // 검색어 검증 및 제한
     const value = sanitizeSearchQuery(rawValue)
     setSearchValue(value)
-    setShowSuggestions(true)
-    setForceShowSuggestions(true)
     setError(null)
     
-    // 사용자가 타이핑 중임을 표시
-    isUserTypingRef.current = true
-    
-    // 타이핑 완료 후 300ms 뒤에 타이핑 상태 해제
-    setTimeout(() => {
-      isUserTypingRef.current = false
-    }, 300)
+    // 입력이 있으면 제안 표시
+    if (value.length > 0) {
+      setShowSuggestions(true)
+    }
   }
 
   // 검색창 포커스
   const handleInputFocus = () => {
-    // 기존 블러 타이머 취소
-    if (blurTimeoutRef.current) {
-      clearTimeout(blurTimeoutRef.current)
-      blurTimeoutRef.current = null
-    }
-    
-    setIsFocused(true)
     setShowSuggestions(true)
-    setForceShowSuggestions(true)
   }
 
   // 검색창 블러 처리 개선
@@ -236,32 +174,12 @@ export function PlaceSearchBox({
       return
     }
     
-    // 사용자가 타이핑 중이거나 검색 중일 때는 블러를 무시
-    if (isUserTypingRef.current || isSearching || isLoading) {
-      return
-    }
-    
-    // 검색 완료 후 빠른 숨김 처리
-    const delay = 300
-    
-    // 기존 타이머 취소
-    if (blurTimeoutRef.current) {
-      clearTimeout(blurTimeoutRef.current)
-    }
-    
-    // 실제 블러 처리
-    blurTimeoutRef.current = setTimeout(() => {
-      // 다시 한번 상태 확인
-      if (!isUserTypingRef.current && 
-          !isSearching && 
-          !isLoading && 
-          inputRef.current !== document.activeElement) {
-        setIsFocused(false)
+    // 간단한 지연 후 제안 숨김
+    setTimeout(() => {
+      if (inputRef.current !== document.activeElement) {
         setShowSuggestions(false)
-        setForceShowSuggestions(false)
       }
-      blurTimeoutRef.current = null
-    }, delay)
+    }, 150)
   }
 
   // 최근 검색 선택
@@ -276,24 +194,10 @@ export function PlaceSearchBox({
       )
     }
 
-    // 모든 상태 완전 초기화
+    // 상태 초기화
     setSearchValue('')
     setSuggestions([])
     setShowSuggestions(false)
-    setForceShowSuggestions(false)
-    setIsFocused(false)
-    setIsSearching(false)
-    isUserTypingRef.current = false
-    
-    // 기존 타이머들 정리
-    if (blurTimeoutRef.current) {
-      clearTimeout(blurTimeoutRef.current)
-      blurTimeoutRef.current = null
-    }
-    if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current)
-      debounceTimeoutRef.current = null
-    }
   }
 
   // 최근 검색 삭제
@@ -306,12 +210,9 @@ export function PlaceSearchBox({
   const handleClearSearch = () => {
     setSearchValue('')
     setSuggestions([])
-    setShowSuggestions(false)
-    setIsFocused(false)
     setError(null)
     if (inputRef.current) {
       inputRef.current.focus()
-      setIsFocused(true)
       setShowSuggestions(true)
     }
   }
@@ -375,9 +276,8 @@ export function PlaceSearchBox({
           onFocus={handleInputFocus}
           onBlur={handleInputBlur}
           onKeyDown={(e) => {
-            // 키보드 입력 시 포커스 상태 강제 설정
+            // 키보드 입력 시 제안 표시
             if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete') {
-              setIsFocused(true)
               setShowSuggestions(true)
             }
           }}
@@ -414,24 +314,17 @@ export function PlaceSearchBox({
       )}
 
       {/* 검색 제안 및 최근 검색 */}
-      {(showSuggestions || forceShowSuggestions) && !error && (
+      {showSuggestions && !error && (
         <Card 
           ref={suggestionsPanelRef}
           className="absolute top-full mt-1 w-full z-50 shadow-lg"
           onMouseDown={(e) => e.preventDefault()} // 마우스 다운 시 포커스 유지
-          onMouseEnter={() => {
-            // 마우스가 suggestions 패널에 들어오면 포커스 상태 유지
-            if (inputRef.current) {
-              setIsFocused(true)
-            }
-          }}
           onMouseLeave={() => {
-            // 마우스가 패널을 벗어나면 빠르게 숨김
+            // 마우스가 패널을 벗어나면 제안 숨김 (입력 필드에 포커스가 없는 경우)
             if (!inputRef.current || inputRef.current !== document.activeElement) {
               setTimeout(() => {
-                if (!isUserTypingRef.current && !isSearching && !isLoading) {
+                if (!isLoading) {
                   setShowSuggestions(false)
-                  setForceShowSuggestions(false)
                 }
               }, 100)
             }

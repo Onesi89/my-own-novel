@@ -78,7 +78,7 @@ export class OptimizedAIService {
     let cacheHit = false
     let tokensSaved = 0
     let costSaved = 0
-    let compressionRatio = 0
+    const compressionRatio = 0
     let choicesLimited = false
     const provider = this.selectProvider(preferences)
 

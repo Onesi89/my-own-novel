@@ -127,13 +127,9 @@ export function PlaceInfoModal({
         duration: initialData.duration || location?.duration || 30
       })
     } else if (location) {
-      // 주소에서 장소 이름 추출 시도
-      const addressParts = location.address?.split(',') || []
-      const suggestedName = addressParts[0]?.trim() || ''
-      
       setFormData(prev => ({
         ...prev,
-        customName: suggestedName,
+        customName: '', // 자동 입력하지 않고 사용자가 직접 입력하도록 함
         visitTime: location.timestamp ? formatTimeForInput(location.timestamp) : '',
         duration: location.duration || 30
       }))

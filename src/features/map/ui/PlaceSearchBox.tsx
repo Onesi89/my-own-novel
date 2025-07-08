@@ -25,7 +25,7 @@ import {
   Badge
 } from '@/shared/ui'
 import { getPlacesService, PlaceAutocompleteResult } from '../api/placesService'
-import { sanitizeSearchQuery, INPUT_LIMITS } from '@/shared/lib/validation/inputValidation'
+import { INPUT_LIMITS } from '@/shared/lib/validation/inputValidation'
 
 interface PlaceSearchResult {
   placeId: string
@@ -36,8 +36,6 @@ interface PlaceSearchResult {
     lng: number
   }
   types: string[]
-  rating?: number
-  priceLevel?: number
 }
 
 interface PlaceSearchBoxProps {
@@ -60,11 +58,16 @@ export function PlaceSearchBox({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
+  // 상태 변화 디버깅 (필요시 주석 해제)
+  // console.log('🔄 [PlaceSearchBox] 상태:', { searchValue, showSuggestions, isLoading })
+  
   const inputRef = useRef<HTMLInputElement>(null)
   const suggestionsPanelRef = useRef<HTMLDivElement>(null)
 
-  // 디바운스된 검색 함수
-  const searchPlaces = useCallback(async (query: string) => {
+  // 중복 제거 - debouncedSearch에 통합됨
+
+  // 안정적인 디바운스 콜백 생성
+  const searchFunction = useCallback(async (query: string) => {
     if (query.length < 2) {
       setSuggestions([])
       return
@@ -77,6 +80,7 @@ export function PlaceSearchBox({
       const placesService = getPlacesService()
       const results = await placesService.autocomplete(query)
       setSuggestions(results)
+      // 검색 완료 후 드롭다운 유지
       setShowSuggestions(true)
     } catch (err) {
       console.error('Search error:', err)
@@ -87,13 +91,9 @@ export function PlaceSearchBox({
     }
   }, [])
 
-  // useDebouncedCallback 사용으로 debounce 간소화
-  const debouncedSearch = useDebouncedCallback(searchPlaces, 300)
+  const debouncedSearch = useDebouncedCallback(searchFunction, 300)
 
-  // 검색어 변경 시 자동 검색
-  useEffect(() => {
-    debouncedSearch(searchValue)
-  }, [searchValue, debouncedSearch])
+  // useEffect 제거 - handleInputChange에서 직접 호출
 
   // 장소 선택 처리
   const handlePlaceSelect = async (autocompleteResult: PlaceAutocompleteResult) => {
@@ -109,9 +109,7 @@ export function PlaceSearchBox({
         name: placeDetails.name,
         address: placeDetails.address,
         location: placeDetails.location,
-        types: placeDetails.types,
-        rating: placeDetails.rating,
-        priceLevel: placeDetails.priceLevel
+        types: placeDetails.types
       }
 
       // 최근 검색 기록 업데이트
@@ -131,15 +129,20 @@ export function PlaceSearchBox({
         )
       }
 
-      // 검색창 초기화 (더 단순하게)
-      setSearchValue('')
-      setSuggestions([])
-      setShowSuggestions(false)
       
-      // 입력 필드 포커스 해제
-      if (inputRef.current) {
-        inputRef.current.blur()
-      }
+      setTimeout(() => {
+        if (inputRef.current) {
+          // 검색창 초기화 (디바운스 취소 후 상태 초기화)
+          debouncedSearch.cancel() // 진행 중인 디바운스 취소
+          setSearchValue('')
+          setSuggestions([])
+          setShowSuggestions(false)
+          setError(null)
+          
+          // 입력 필드 포커스 (상태는 이미 초기화됨)
+          inputRef.current.focus()
+        }
+      }, 500)
     } catch (err) {
       console.error('Place select error:', err)
       setError('장소 정보를 가져오는 중 오류가 발생했습니다.')
@@ -148,39 +151,43 @@ export function PlaceSearchBox({
     }
   }
 
-  // 입력값 변경
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value
-    const value = sanitizeSearchQuery(rawValue)
+  // 입력값 변경 - 단순하곤 안정적인 버전
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    
+    // 상태 업데이트
     setSearchValue(value)
     setError(null)
     
-    // 입력이 있으면 제안 표시
-    if (value.length > 0) {
-      setShowSuggestions(true)
+    // 입력이 있으면 검색 실행
+    if (value.length >= 2) {
+      setShowSuggestions(true) // 검색 시작할 때 드롭다운 표시
+      debouncedSearch(value)
+    } else if (value.length === 0) {
+      // 빈 입력이면 제안 숨김
+      setSuggestions([])
+      setShowSuggestions(false)
+      debouncedSearch.cancel()
     }
-  }
+  }, [debouncedSearch])
 
-  // 검색창 포커스
-  const handleInputFocus = () => {
+  // 검색창 포커스 - 단순화
+  const handleInputFocus = useCallback(() => {
+    // 포커스 시만 제안 표시 상태 활성화 (실제 표시는 조건부)
     setShowSuggestions(true)
-  }
+  }, [])
 
   // 검색창 블러 처리 개선
-  const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+  const handleInputBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
     // 포커스가 suggestions 패널로 이동하는 경우 블러를 방지
     const relatedTarget = e.relatedTarget as HTMLElement
     if (relatedTarget && suggestionsPanelRef.current?.contains(relatedTarget)) {
       return
     }
     
-    // 간단한 지연 후 제안 숨김
-    setTimeout(() => {
-      if (inputRef.current !== document.activeElement) {
-        setShowSuggestions(false)
-      }
-    }, 150)
-  }
+    // 블러 시에는 showSuggestions 상태를 변경하지 않음
+    // 드롭다운 숨김은 다른 조건으로 처리
+  }, [])
 
   // 최근 검색 선택
   const handleRecentSearchSelect = (place: PlaceSearchResult) => {
@@ -194,10 +201,19 @@ export function PlaceSearchBox({
       )
     }
 
-    // 상태 초기화
-    setSearchValue('')
+    // 상태 초기화 (최근 검색어 선택 시)
+    debouncedSearch.cancel() // 진행 중인 디바운스 취소
+    setSearchValue('') // 입력 상태 초기화
     setSuggestions([])
     setShowSuggestions(false)
+    setError(null)
+    
+    // 입력 필드 포커스 (새로운 검색 준비)
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus()
+      }
+    }, 50)
   }
 
   // 최근 검색 삭제
@@ -208,12 +224,12 @@ export function PlaceSearchBox({
 
   // 검색창 초기화
   const handleClearSearch = () => {
+    debouncedSearch.cancel() // 진행 중인 디바운스 취소
     setSearchValue('')
     setSuggestions([])
     setError(null)
     if (inputRef.current) {
       inputRef.current.focus()
-      setShowSuggestions(true)
     }
   }
 
@@ -250,23 +266,41 @@ export function PlaceSearchBox({
     return '장소'
   }
 
-  // 별점 표시
-  const renderRating = (rating?: number) => {
-    if (!rating) return null
-    
-    return (
-      <div className="flex items-center gap-1">
-        <span className="text-yellow-500 text-sm">★</span>
-        <span className="text-sm text-gray-600">{rating.toFixed(1)}</span>
-      </div>
-    )
-  }
+  // renderRating 함수 제거 - 현재 사용되지 않음
 
   return (
     <div className={`relative ${className}`}>
+      {/* 최근 검색어 뱃지 */}
+      {recentSearches.length > 0 && (
+        <div className="mb-3">
+          <div className="flex flex-wrap gap-2">
+            {recentSearches.slice(0, 5).map((place) => (
+              <div
+                key={place.placeId}
+                className="group relative inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-full transition-colors duration-200 cursor-pointer"
+                onClick={() => handleRecentSearchSelect(place)}
+              >
+                <MapPin className="w-3 h-3 text-gray-500" />
+                <span className="text-gray-700 truncate max-w-32">{place.name}</span>
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleRemoveRecentSearch(place.placeId, e)
+                  }}
+                  className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-gray-300 rounded-full cursor-pointer"
+                >
+                  <X className="w-3 h-3 text-gray-500" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
         <Input
+          key="place-search-input"
           ref={inputRef}
           maxLength={INPUT_LIMITS.SEARCH_QUERY}
           type="text"
@@ -276,9 +310,10 @@ export function PlaceSearchBox({
           onFocus={handleInputFocus}
           onBlur={handleInputBlur}
           onKeyDown={(e) => {
-            // 키보드 입력 시 제안 표시
-            if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete') {
-              setShowSuggestions(true)
+            // Enter 키로 제안 선택 방지
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              return
             }
           }}
           className="pl-10 pr-10"
@@ -313,31 +348,28 @@ export function PlaceSearchBox({
         </div>
       )}
 
-      {/* 검색 제안 및 최근 검색 */}
-      {showSuggestions && !error && (
+      {/* 검색 결과 드롭다운 */}
+      {showSuggestions && !error && searchValue.length >= 2 && (
         <Card 
           ref={suggestionsPanelRef}
           className="absolute top-full mt-1 w-full z-50 shadow-lg"
-          onMouseDown={(e) => e.preventDefault()} // 마우스 다운 시 포커스 유지
-          onMouseLeave={() => {
-            // 마우스가 패널을 벗어나면 제안 숨김 (입력 필드에 포커스가 없는 경우)
-            if (!inputRef.current || inputRef.current !== document.activeElement) {
-              setTimeout(() => {
-                if (!isLoading) {
-                  setShowSuggestions(false)
-                }
-              }, 100)
-            }
+          onMouseDown={(e) => {
+            // 마우스 다운 시 기본 동작 방지하여 입력 필드 포커스 유지
+            e.preventDefault()
           }}
         >
-          <CardContent className="p-2">
-            {/* 검색 제안 */}
+          <CardContent className="p-2 max-h-80 overflow-y-auto">
+            {/* 검색 결과 영역 */}
             {searchValue.length >= 2 && suggestions.length > 0 && (
               <div className="space-y-1">
                 {suggestions.map((suggestion) => (
                   <div
                     key={suggestion.placeId}
                     className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"
+                    onMouseDown={(e) => {
+                      // 클릭 시 포커스 방지
+                      e.preventDefault()
+                    }}
                     onClick={() => handlePlaceSelect(suggestion)}
                   >
                     <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -359,51 +391,6 @@ export function PlaceSearchBox({
               </div>
             )}
 
-            {/* 최근 검색 */}
-            {searchValue.length === 0 && recentSearches.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 px-2 py-1 text-sm text-gray-500">
-                  <Clock className="w-3 h-3" />
-                  최근 검색
-                </div>
-                <div className="space-y-1">
-                  {recentSearches.map((place) => (
-                    <div
-                      key={place.placeId}
-                      className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer group"
-                      onClick={() => handleRecentSearchSelect(place)}
-                    >
-                      <div className="flex items-start gap-3 flex-1">
-                        <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-gray-900 truncate">
-                              {place.name}
-                            </p>
-                            <Badge variant="outline" className="text-xs">
-                              {getPlaceTypeLabel(place.types)}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-gray-500 truncate">
-                            {place.address}
-                          </p>
-                          {renderRating(place.rating)}
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
-                        onClick={(e) => handleRemoveRecentSearch(place.placeId, e)}
-                      >
-                        <X className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
             {/* 로딩 상태 */}
             {isLoading && searchValue.length >= 2 && (
               <div className="flex items-center justify-center p-4">

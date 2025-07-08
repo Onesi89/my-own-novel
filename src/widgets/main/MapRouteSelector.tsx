@@ -272,8 +272,8 @@ export function MapRouteSelector({
       customInfo: {
         customName: place.name,
         category: inferCategoryFromTypes(place.types),
-        description: `검색으로 추가된 장소${place.rating ? ` (별점: ${place.rating})` : ''}`,
-        storyHint: '검색으로 발견한 특별한 장소'
+        description: '', // 기본값을 빈 문자열로 설정하여 사용자가 직접 입력하도록 함
+        storyHint: '' // 기본값을 빈 문자열로 설정하여 사용자가 직접 입력하도록 함
       }
     }
     

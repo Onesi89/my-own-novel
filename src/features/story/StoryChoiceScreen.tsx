@@ -179,7 +179,7 @@ export function StoryChoiceScreen({
 
   return (
     <motion.div 
-      className="min-h-screen relative overflow-hidden"
+      className="min-h-screen relative overflow-y-auto overflow-x-hidden"
       style={{
         background: `linear-gradient(135deg, ${genreConfig.primaryColor}15, ${genreConfig.secondaryColor}15)`
       }}
@@ -188,7 +188,9 @@ export function StoryChoiceScreen({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <BackgroundPattern color={genreConfig.primaryColor} />
+      <div className="fixed inset-0 pointer-events-none">
+        <BackgroundPattern color={genreConfig.primaryColor} />
+      </div>
       
       {/* 헤더 */}
       <div className="relative z-10 p-4 pb-0">
@@ -231,7 +233,7 @@ export function StoryChoiceScreen({
       </div>
 
       {/* 질문 섹션 */}
-      <div className="relative z-10 px-4 pb-6">
+      <div className="relative z-10 px-4 pb-6 min-h-0">
         <div className="max-w-2xl mx-auto">
           <motion.div
             initial={{ y: 20, opacity: 0 }}
@@ -276,7 +278,7 @@ export function StoryChoiceScreen({
           </motion.div>
 
           {/* 선택지 */}
-          <div className="space-y-4">
+          <div className="space-y-4 pb-20">
             <AnimatePresence mode="wait">
               {question.choices.map((choice, index) => {
                 const isSelected = selectedChoiceId === choice.id

@@ -162,6 +162,15 @@ export function StoryChoiceScreen({
   const progress = ((currentLocationIndex + 1) / totalLocations) * 100
   
   const BackgroundPattern = BackgroundPatterns[genreConfig.backgroundPattern]
+  
+  console.log('📋 [StoryChoiceScreen] 렌더링 상태:', {
+    questionId: question.id,
+    choicesCount: question.choices?.length || 0,
+    choices: question.choices?.map(c => ({ id: c.id, text: c.text.substring(0, 50) + '...' })),
+    selectedChoiceId,
+    isAnimating,
+    isLoading
+  })
 
   const handleChoiceClick = async (choiceId: string) => {
     if (isAnimating || isLoading) return
@@ -278,7 +287,7 @@ export function StoryChoiceScreen({
           </motion.div>
 
           {/* 선택지 */}
-          <div className="space-y-4 pb-20">
+          <div className="space-y-4 pb-32">
             <AnimatePresence mode="wait">
               {question.choices.map((choice, index) => {
                 const isSelected = selectedChoiceId === choice.id

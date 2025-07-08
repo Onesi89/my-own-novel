@@ -545,23 +545,34 @@ ${currentContent.length > 2000 ? currentContent.substring(currentContent.length 
   ): { id: string; locationId: string; question: string; choices: Array<{ id: string; text: string; description: string }>; context?: string } {
     const lines = response.trim().split('\n').filter(line => line.trim())
     
+    console.log('🔍 [Gemini] 파싱 시작:', {
+      responseLength: response.length,
+      linesCount: lines.length,
+      firstFewLines: lines.slice(0, 5)
+    })
+    
     let question = ''
     let context = ''
     const choices: Array<{ id: string; text: string; description: string }> = []
     
     for (const line of lines) {
-      if (line.startsWith('질문:')) {
-        question = line.replace('질문:', '').trim()
+      // 질문 파싱 - 여러 형식 지원
+      if (line.includes('질문:')) {
+        question = line.replace(/^.*?질문:\s*/, '').trim()
+        console.log('✅ [Gemini] 질문 파싱 성공:', question)
       } else if (line.startsWith('맥락:')) {
         context = line.replace('맥락:', '').trim()
+        console.log('✅ [Gemini] 맥락 파싱 성공:', context)
       } else if (/^\d+\)/.test(line.trim())) {
         const optMatch = line.match(/^\d+\)\s*(.+?)(?:\s*-\s*(.+))?$/)
         if (optMatch) {
-          choices.push({
+          const choice = {
             id: `choice_${locationIndex}_${choices.length}`,
             text: optMatch[1].trim(),
             description: optMatch[2] ? optMatch[2].trim() : optMatch[1].trim()
-          })
+          }
+          choices.push(choice)
+          console.log('✅ [Gemini] 선택지 파싱 성공:', choice)
         }
       }
     }

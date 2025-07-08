@@ -153,19 +153,40 @@ export function InteractiveStoryFlow({
       const generateQuestion = async () => {
         try {
           const route = routes[currentLocationIndex]
+          console.log('🎯 [InteractiveStoryFlow] 질문 생성 시도:', {
+            currentLocationIndex,
+            route: route.address || route.customInfo?.customName,
+            settings: settings.genre
+          })
+          
+          // AI 서비스를 통한 질문 생성 시도
           const question = await aiService.generateInteractiveQuestion(
             route,
             settings,
             currentLocationIndex,
             previousChoices
           )
+          
+          console.log('✅ [InteractiveStoryFlow] AI 질문 생성 성공:', {
+            questionId: question.id,
+            choicesCount: question.choices.length,
+            question: question.question.substring(0, 100) + '...'
+          })
+          
           setCurrentQuestion(question)
         } catch (error) {
-          console.error('질문 생성 실패:', error)
+          console.error('❌ [InteractiveStoryFlow] 질문 생성 실패:', error)
           // 실패 시 목업 데이터 사용
           const route = routes[currentLocationIndex]
           const locationName = route.customInfo?.customName || route.address || `장소 ${currentLocationIndex + 1}`
           const question = generateMockQuestion(currentLocationIndex, locationName, settings)
+          
+          console.log('🔄 [InteractiveStoryFlow] 목업 질문 사용:', {
+            questionId: question.id,
+            choicesCount: question.choices.length,
+            question: question.question.substring(0, 100) + '...'
+          })
+          
           setCurrentQuestion(question)
         } finally {
           setIsLoading(false)
@@ -312,6 +333,13 @@ export function InteractiveStoryFlow({
   }
 
   if (!currentQuestion) {
+    console.log('⏳ [InteractiveStoryFlow] currentQuestion이 null입니다:', {
+      currentLocationIndex,
+      routesLength: routes.length,
+      isCompleted,
+      isLoading
+    })
+    
     return (
       <div className="fixed inset-0 z-50 bg-gradient-to-br from-purple-50 to-indigo-50 flex items-center justify-center">
         <motion.div
@@ -328,7 +356,7 @@ export function InteractiveStoryFlow({
   const locationName = route.customInfo?.customName || route.address || `장소 ${currentLocationIndex + 1}`
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <div className="fixed inset-0 z-50 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
       {/* 뒤로가기 버튼 */}
       <div className="absolute top-4 left-4 z-50">
         <Button

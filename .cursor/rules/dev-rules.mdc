@@ -1,0 +1,15 @@
+## when you run dev server, use this command
+'timeout 5s pnpm dev || echo "Ready"'
+
+## This project will apply FSD architecture.
+
+## This project will apply Component Composition.
+1. ALWAYS prefer composition over inheritance
+2. ALWAYS keep components focused on a single responsibility
+3. PREFER declarative component APIs over imperative ones
+4. PREFER children props over custom render props when possible
+5. EXTRACT common patterns into reusable composed components
+6. COLOCATE related components in the same feature directory
+
+## when I tell you to apply refeactoring or design pattern, you must not change UI.
+

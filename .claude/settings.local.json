@@ -42,7 +42,12 @@
       "Bash(npm run lint)",
       "Bash(npm run:*)",
       "Bash(npm uninstall:*)",
-      "Bash(pnpm install:*)"
+      "Bash(pnpm install:*)",
+      "Bash(pnpm build:*)",
+      "Bash(time npx webpack-bundle-analyzer --help)",
+      "Bash(/dev/null)",
+      "Bash(echo \"Command took: $?\")",
+      "Bash(cat:*)"
     ],
     "deny": []
   }

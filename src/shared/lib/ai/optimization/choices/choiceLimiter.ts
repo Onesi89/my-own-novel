@@ -56,9 +56,10 @@ export class ChoiceLimiter implements ChoiceStrategy {
   generateStructuredPrompt(
     routes: RouteContext[], 
     preferences: StoryPreferences,
-    choiceLimit: number
+    choiceLimit: number,
+    previousChoices?: Array<{ question: string; choice: string }>
   ): string {
-    return this.promptGenerator.generateStructuredPrompt(routes, preferences, choiceLimit)
+    return this.promptGenerator.generateStructuredPrompt(routes, preferences, choiceLimit, previousChoices)
   }
 
   validateChoices(choices: any[]): boolean {

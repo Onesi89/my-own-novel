@@ -8,7 +8,6 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { 
   MapPin, 
@@ -84,7 +83,6 @@ export function RouteEditingFlow({ routes, onComplete, onBack }: RouteEditingFlo
     register,
     handleSubmit,
     setValue,
-    watch,
     reset,
     formState: { errors }
   } = useForm<RouteEditData>({
@@ -197,11 +195,9 @@ export function RouteEditingFlow({ routes, onComplete, onBack }: RouteEditingFlo
       <div className="bg-white/50 border-b border-purple-100">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="w-full bg-purple-200 rounded-full h-2">
-            <motion.div 
+            <div 
               className="h-2 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500"
-              initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.5 }}
+              style={{ width: `${progress}%` }}
             />
           </div>
           <p className="text-sm text-purple-700 mt-2">
@@ -212,14 +208,7 @@ export function RouteEditingFlow({ routes, onComplete, onBack }: RouteEditingFlo
 
       {/* Main Content */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentIndex}
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            transition={{ duration: 0.3 }}
-          >
+        <div>
             <form onSubmit={handleSubmit(handleNext)} className="space-y-8">
               {/* 현재 장소 정보 */}
               <Card className="border-2 border-purple-200 bg-white/80">
@@ -400,8 +389,7 @@ export function RouteEditingFlow({ routes, onComplete, onBack }: RouteEditingFlo
                 </Button>
               </div>
             </form>
-          </motion.div>
-        </AnimatePresence>
+        </div>
       </div>
     </div>
   )

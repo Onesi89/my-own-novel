@@ -1,6 +1,6 @@
 /**
  * Create Story Page - Server Component
- * 새 소설 만들기 페이지
+ * 새 소설 만들기 페이지 (경로 선택)
  */
 
 import { Suspense } from 'react'

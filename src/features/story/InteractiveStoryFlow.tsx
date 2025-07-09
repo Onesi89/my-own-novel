@@ -5,9 +5,8 @@
 
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useRouter } from 'next/navigation'
 import { 
   StorySettings, 
   StoryQuestion, 
@@ -16,7 +15,7 @@ import {
 } from '@/shared/lib/story/types'
 import { StoryChoiceScreen } from './StoryChoiceScreen'
 import { Button, Card, CardContent } from '@/shared/ui'
-import { ArrowLeft, BookOpen, CheckCircle, Sparkles } from 'lucide-react'
+import { ArrowLeft, CheckCircle, Sparkles } from 'lucide-react'
 import { getAIService } from '@/shared/lib/ai/aiService'
 
 interface InteractiveStoryFlowProps {
@@ -132,7 +131,6 @@ export function InteractiveStoryFlow({
   onComplete, 
   onBack 
 }: InteractiveStoryFlowProps) {
-  const router = useRouter()
   const [currentLocationIndex, setCurrentLocationIndex] = useState(0)
   const [progress, setProgress] = useState<StoryProgress>({
     currentLocationIndex: 0,
@@ -144,10 +142,34 @@ export function InteractiveStoryFlow({
   const [isCompleted, setIsCompleted] = useState(false)
   const [aiService] = useState(() => getAIService())
   const [previousChoices, setPreviousChoices] = useState<Array<{ question: string; choice: string }>>([])
+  const previousChoicesRef = useRef<Array<{ question: string; choice: string }>>([])
+  const processedLocationsRef = useRef(new Set<number>()) // 처리된 위치 인덱스들
+  const currentRequestRef = useRef<Promise<any> | null>(null) // 현재 진행 중인 요청
+
+  // previousChoices 상태가 변경될 때 ref도 업데이트
+  useEffect(() => {
+    previousChoicesRef.current = previousChoices
+  }, [previousChoices])
 
   // 현재 질문 생성
   useEffect(() => {
+    // 이미 처리된 위치인지 확인
+    if (processedLocationsRef.current.has(currentLocationIndex)) {
+      console.log('🚫 [InteractiveStoryFlow] 이미 처리된 위치:', currentLocationIndex)
+      return
+    }
+
+    // 현재 요청이 진행 중인지 확인
+    if (currentRequestRef.current) {
+      console.log('🚫 [InteractiveStoryFlow] 다른 요청이 진행 중, 요청 차단')
+      return
+    }
+    
     if (currentLocationIndex < routes.length && !isCompleted) {
+      console.log('🎯 [InteractiveStoryFlow] 새로운 질문 생성 시작:', { currentLocationIndex })
+      
+      // 위치를 처리됨으로 마크
+      processedLocationsRef.current.add(currentLocationIndex)
       setIsLoading(true)
       
       const generateQuestion = async () => {
@@ -159,13 +181,17 @@ export function InteractiveStoryFlow({
             settings: settings.genre
           })
           
-          // AI 서비스를 통한 질문 생성 시도
-          const question = await aiService.generateInteractiveQuestion(
+          // 요청 Promise 저장
+          const requestPromise = aiService.generateInteractiveQuestion(
             route,
             settings,
             currentLocationIndex,
-            previousChoices
+            previousChoicesRef.current
           )
+          currentRequestRef.current = requestPromise
+          
+          // AI 서비스를 통한 질문 생성 시도 - ref를 통해 최신 값 참조
+          const question = await requestPromise
           
           console.log('✅ [InteractiveStoryFlow] AI 질문 생성 성공:', {
             questionId: question.id,
@@ -190,12 +216,13 @@ export function InteractiveStoryFlow({
           setCurrentQuestion(question)
         } finally {
           setIsLoading(false)
+          currentRequestRef.current = null // 요청 완료, Promise 참조 정리
         }
       }
 
       generateQuestion()
     }
-  }, [currentLocationIndex, routes, settings, isCompleted, aiService, previousChoices])
+  }, [currentLocationIndex, routes, settings, isCompleted, aiService])
 
   const handleChoiceSelect = async (choiceId: string) => {
     if (!currentQuestion) return
@@ -238,6 +265,7 @@ export function InteractiveStoryFlow({
         id: `session_${Date.now()}`,
         settings,
         routes,
+        responses: previousChoices,
         progress: newProgress,
         status: 'completed',
         createdAt: new Date().toISOString(),

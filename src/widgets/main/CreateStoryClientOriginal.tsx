@@ -10,7 +10,6 @@
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
 import { 
   ArrowLeft,
   MapPin,
@@ -20,7 +19,6 @@ import {
   Sparkles,
   X,
   CheckCircle,
-  Clock,
   Navigation,
   Download,
   Info
@@ -39,15 +37,12 @@ import {
   SheetTitle,
   Input,
   Label,
-  Badge,
-  Separator
+  Badge
 } from '@/shared/ui'
 import { useMainPage } from '@/features/main'
 import { MapRouteSelectorEmbedded } from './MapRouteSelectorEmbedded'
-import { InlineStorySetup } from '@/features/story/InlineStorySetup'
-import { InteractiveStoryFlow } from '@/features/story/InteractiveStoryFlow'
 import { RouteEditingFlow } from '@/features/story/RouteEditingFlow'
-import { StorySettings, InteractiveStorySession } from '@/shared/lib/story/types'
+import { useStoryActions } from '@/shared/lib/store/storyProgressStore'
 
 export function CreateStoryClientOriginal() {
   const router = useRouter()
@@ -56,18 +51,14 @@ export function CreateStoryClientOriginal() {
     isLoadingTimeline,
     isGeneratingStory,
     isUploadingFile,
-    uploadGoogleTakeout,
-    generateStory
+    uploadGoogleTakeout
   } = useMainPage()
+  const { setSelectedRoutes: setStoreRoutes } = useStoryActions()
 
   // 모달 상태
   const [isRouteSelectionOpen, setIsRouteSelectionOpen] = useState(false)
   const [isRouteEditingOpen, setIsRouteEditingOpen] = useState(false)
-  const [isInlineStorySetupOpen, setIsInlineStorySetupOpen] = useState(false)
-  const [isInteractiveStoryOpen, setIsInteractiveStoryOpen] = useState(false)
   const [isRouteConfirmOpen, setIsRouteConfirmOpen] = useState(false)
-  const [storySettings, setStorySettings] = useState<StorySettings | null>(null)
-  const [isContentFadingOut, setIsContentFadingOut] = useState(false)
   
   // 경로 선택 상태
   const [isMapMode, setIsMapMode] = useState(false)
@@ -80,8 +71,6 @@ export function CreateStoryClientOriginal() {
     end: ''
   })
   
-  // AI 제공자는 고정 (Gemini 2.5 Flash)
-  const aiProvider = 'gemini' as const
 
   // 뒤로가기
   const handleBack = () => {
@@ -95,7 +84,8 @@ export function CreateStoryClientOriginal() {
 
   // 경로 선택 완료 (확인 모달 표시)
   const handleRouteSelectionComplete = (routes: any[]) => {
-    setSelectedRoutes(routes)
+    setSelectedRoutes(routes) // Local state
+    setStoreRoutes(routes) // Zustand store에 저장
     setIsMapMode(false)
     setIsRouteConfirmOpen(true)
   }
@@ -107,65 +97,20 @@ export function CreateStoryClientOriginal() {
     setIsRouteEditingOpen(true)
   }
 
-  // 소설 설정 완료
-  const handleStorySettingsConfirm = (settings: StorySettings) => {
-    setStorySettings(settings)
-    setIsInlineStorySetupOpen(false)
-    setIsInteractiveStoryOpen(true)
-  }
-
-  // 인터랙티브 소설 완료
-  const handleInteractiveStoryComplete = async (session: InteractiveStorySession) => {
-    try {
-      // 실제 소설 생성 API 호출
-      const result = await generateStory(
-        session.routes,
-        {
-          genre: session.settings.genre,
-          style: session.settings.style,
-          tone: 'light',
-          length: 6000
-        },
-        aiProvider
-      )
-      
-      setIsInteractiveStoryOpen(false)
-      // 생성된 소설 페이지로 이동
-      if (result?.storyId) {
-        router.push(`/stories/${result.storyId}`)
-      } else {
-        router.push('/my-stories')
-      }
-    } catch (error) {
-      console.error('Story generation error:', error)
-      setIsInteractiveStoryOpen(false)
-      // 에러 처리 - 일단 대시보드로 이동
-      router.push('/dashboard')
-    }
-  }
-
-  // 인터랙티브 소설에서 뒤로가기
-  const handleInteractiveStoryBack = () => {
-    setIsInteractiveStoryOpen(false)
-    setIsInlineStorySetupOpen(true)
-  }
-
-  // 인라인 소설 설정에서 뒤로가기 - 경로 확정 모달로 돌아가기
-  const handleInlineStorySetupBack = () => {
-    setIsInlineStorySetupOpen(false)
-    setIsContentFadingOut(false)
-    setIsRouteConfirmOpen(true)
-  }
 
   // 경로 편집 완료
   const handleRouteEditingComplete = (editedRoutes: any[]) => {
+    console.log(">>>> 편집 완료 시작", performance.now())
     setSelectedRoutes(editedRoutes)
+    setStoreRoutes(editedRoutes) // Zustand store에 저장
+    console.log(">>>> 상태 업데이트 완료", performance.now())
     setIsRouteEditingOpen(false)
-    // 페이드 아웃 시작
-    setIsContentFadingOut(true)
-    setTimeout(() => {
-      setIsInlineStorySetupOpen(true)
-    }, 500)
+    console.log(">>>> 모달 닫기 완료", performance.now())
+    
+    // 즉시 라우팅 (클라이언트 사이드 렌더링으로 변경됨)
+    console.log(">>>> 라우터 이동 시작", performance.now())
+    router.push('/create-story/storySetup')
+    console.log(">>>> 라우터 이동 호출 완료", performance.now())
   }
 
   // 경로 편집에서 뒤로가기
@@ -316,29 +261,9 @@ export function CreateStoryClientOriginal() {
         />
       )}
 
-      {/* 인라인 소설 설정 화면 */}
-      {isInlineStorySetupOpen && (
-        <InlineStorySetup
-          routesCount={selectedRoutes.length}
-          onComplete={handleStorySettingsConfirm}
-          onBack={handleInlineStorySetupBack}
-        />
-      )}
-
-      {/* 메인 컨텐츠 - 페이드 아웃 애니메이션 */}
-      <AnimatePresence>
-        {!isInlineStorySetupOpen && !isRouteEditingOpen && (
-          <motion.div
-            initial={{ opacity: 1 }}
-            animate={{ opacity: isContentFadingOut ? 0 : 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-            onAnimationComplete={() => {
-              if (isContentFadingOut) {
-                // 페이드 아웃 완료 후 상태 초기화는 부모에서 처리
-              }
-            }}
-          >
+      {/* 메인 컨텐츠 */}
+      {!isRouteEditingOpen && (
+        <div>
           {/* Header */}
           <header className="bg-white/80 backdrop-blur-sm border-b border-purple-200 sticky top-0 z-50">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -468,10 +393,13 @@ export function CreateStoryClientOriginal() {
                       
                       <Button 
                         onClick={() => {
-                          setIsContentFadingOut(true)
-                          setTimeout(() => {
-                            setIsInlineStorySetupOpen(true)
-                          }, 500)
+                          if (selectedRoutes.length === 0) {
+                            alert('경로를 먼저 선택해주세요.')
+                            return
+                          }
+                          console.log('Navigating to storySetup with routes:', selectedRoutes.length)
+                          // 스토리 설정 페이지로 네비게이션
+                          router.push('/create-story/storySetup')
                         }}
                         disabled={selectedRoutes.length === 0 || isGeneratingStory}
                         className={`w-full ${selectedRoutes.length > 0 ? 'bg-indigo-600 hover:bg-indigo-700' : ''}`}
@@ -485,9 +413,8 @@ export function CreateStoryClientOriginal() {
               </div>
             </div>
           </main>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
 
       {/* 경로 선택 모달 */}
       <Sheet open={isRouteSelectionOpen} onOpenChange={setIsRouteSelectionOpen}>
@@ -797,15 +724,6 @@ export function CreateStoryClientOriginal() {
         </SheetContent>
       </Sheet>
 
-      {/* 인터랙티브 소설 플로우 */}
-      {isInteractiveStoryOpen && storySettings && (
-        <InteractiveStoryFlow
-          routes={selectedRoutes}
-          settings={storySettings}
-          onComplete={handleInteractiveStoryComplete}
-          onBack={handleInteractiveStoryBack}
-        />
-      )}
     </>
   )
 }

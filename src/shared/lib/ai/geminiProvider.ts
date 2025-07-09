@@ -30,26 +30,26 @@ export class GeminiProvider implements AIProvider {
     this.model = model
   }
 
-  async generateStory(context: StoryGenerationContext): Promise<AIResponse> {
+  async generateStory(context: StoryGenerationContext, previousChoices?: Array<{ question: string; choice: string }>): Promise<AIResponse> {
     try {
-      const prompt = this.buildStoryPrompt(context)
+      const prompt = this.buildStoryPrompt(context, previousChoices)
       const model = this.client.getGenerativeModel({ model: this.model })
       
       const result = await model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.7,
+          temperature: 0.8,
           topK: 40,
           topP: 0.95,
-          maxOutputTokens: 4000,
+          maxOutputTokens: 8192,
         }
       })
 
       const response = result.response
       const content = response.text()
 
-      if (!content) {
-        throw new Error('Empty response from Gemini')
+      if (!content || content.length < 1000) {
+        throw new Error(`Generated content too short: ${content?.length || 0} characters`)
       }
 
       // 응답 파싱 및 구조화
@@ -271,8 +271,9 @@ export class GeminiProvider implements AIProvider {
     }
   }
 
-  private buildStoryPrompt(context: StoryGenerationContext): string {
+  private buildStoryPrompt(context: StoryGenerationContext, previousChoices?: Array<{ question: string; choice: string }>): string {
     const { routes, preferences } = context
+    const genreEmoji = this.getGenreEmoji(preferences.genre)
     
     const routeInfo = routes.map((route, index) => {
       const time = new Date(route.timestamp).toLocaleString('ko-KR')
@@ -280,43 +281,109 @@ export class GeminiProvider implements AIProvider {
       const description = route.customInfo?.description || ''
       const duration = route.duration ? `${route.duration}분 체류` : ''
       
-      return `${index + 1}. ${name}
+      return `${index + 1}. **${name}**
    - 시간: ${time}
    - ${duration}
-   - ${description}`
-    }).join('\n\n')
+   - ${description || '특별한 설명 없음'}`
+    }).join('\n')
 
-    return `당신은 창의적인 작가입니다. 주어진 실제 이동 경로를 바탕으로 ${preferences.genre} 장르의 ${preferences.length}자 분량 소설을 작성해주세요.
+    return `당신은 창의적인 소설 작가입니다. 
+다음 마크다운 형식을 **정확히** 따라 ${preferences.genre} 장르의 인터랙티브 소설을 작성해주세요.
 
-**작성 조건:**
-- 장르: ${preferences.genre}
-- 분량: ${preferences.length}자 내외
-- 시점: ${preferences.style === 'first_person' ? '1인칭' : '3인칭'}
-- 톤: ${preferences.tone}
-- 주인공: "나" (실제 경험한 사람 관점)
+## 📝 필수 마크다운 규칙
+1. 제목은 # (H1) 사용
+2. 장소는 ## 📍 (H2) 사용  
+3. 질문 섹션은 ### ${genreEmoji} (H3) 사용
+4. 선택지 번호는 **굵은 글씨**로 강조
+5. 구분선은 --- 사용
 
-**이동 경로 정보:**
+## 🎭 스토리 설정
+- **장르**: ${preferences.genre}
+- **시점**: ${preferences.style === 'first_person' ? '1인칭' : '3인칭'}
+- **분위기**: ${preferences.tone}
+- **목표 분량**: 각 장소당 200-300자
+
+## 🗺️ 방문 장소
 ${routeInfo}
 
-**요구사항:**
-1. 각 장소에서 벌어질 수 있는 흥미로운 사건을 창조해주세요
-2. 장소 간 이동을 자연스럽게 연결해주세요
-3. 현실적이면서도 재미있는 스토리로 만들어주세요
-4. 각 이동 경로에 대해 하나의 선택지만 제시해주세요 (총 ${routes.length}개의 선택지)
+${previousChoices && previousChoices.length > 0 ? `
+## 🎯 이전 선택지 히스토리
+${previousChoices.map((choice, index) => {
+  const routeInfo = routes[index]
+  const location = routeInfo?.customInfo?.customName || routeInfo?.address || `장소 ${index + 1}`
+  return `${index + 1}. **${location}**에서의 상황: ${choice.question}
+   → 사용자의 선택: ${choice.choice}`
+}).join('\n\n')}
 
-**응답 형식:**
-제목: [창의적인 제목]
+**중요**: 위의 이전 선택들을 바탕으로 각 장소에서 연결성 있는 스토리를 만들어주세요.
+` : ''}
 
-[소설 내용]
+## ⚠️ 반드시 아래 형식을 정확히 따라주세요:
 
-**선택지:**
-> ### 🎯 [장소명] - [상황 설명]
-> 
-> 1) [선택지 1]
-> 2) [선택지 2]  
-> 3) [선택지 3]
+# [창의적이고 흥미로운 제목]
 
-소설을 작성해주세요:`
+> *[간단한 소개문구 또는 분위기 설정]*
+
+## 📍 ${routes[0]?.customInfo?.customName || routes[0]?.address || '시작 지점'}
+
+[이 장소에서 벌어지는 이야기를 200-300자로 생생하게 묘사]
+
+### ${genreEmoji} 선택의 순간
+
+> **질문**: [현재 상황에서 주인공이 직면한 딜레마나 선택의 기로]
+
+**당신의 선택은?**
+
+1. **[구체적인 행동 1]** - *[선택 시 예상되는 결과나 분위기]*
+2. **[구체적인 행동 2]** - *[선택 시 예상되는 결과나 분위기]*  
+3. **[구체적인 행동 3]** - *[선택 시 예상되는 결과나 분위기]*
+
+---
+
+${routes.length > 1 ? routes.slice(1).map((route) => `
+## 📍 ${route.customInfo?.customName || route.address}
+
+[이 장소에서의 이야기 200-300자]
+
+### ${genreEmoji} 선택의 순간
+
+> **질문**: [상황에 맞는 선택 질문]
+
+**당신의 선택은?**
+
+1. **[행동 1]** - *[결과 설명]*
+2. **[행동 2]** - *[결과 설명]*
+3. **[행동 3]** - *[결과 설명]*
+
+---`).join('\n') : ''}
+
+## 💡 추가 지시사항
+- 각 선택지는 서로 다른 방향성을 가져야 함
+- 질문은 독자의 몰입을 유도하는 형태로 작성
+- 선택지 설명은 호기심을 자극하되 너무 많은 정보는 주지 않기
+- 이탤릭체(*)는 분위기나 감정 표현에 활용
+- 굵은 글씨(**)는 중요한 키워드나 선택지 강조에 사용`
+  }
+
+  private getGenreEmoji(genre: string): string {
+    const emojis: { [key: string]: string } = {
+      'SF': '🚀',
+      'romance': '💕',
+      'comedy': '😄',
+      'mystery': '🔍',
+      'drama': '🎭',
+      'adventure': '⚔️',
+      'horror': '👻',
+      'fantasy': '🔮',
+      '판타지': '🔮',
+      '로맨스': '💕',
+      '코미디': '😄',
+      '미스터리': '🔍',
+      '드라마': '🎭',
+      '모험': '⚔️',
+      '공포': '👻'
+    }
+    return emojis[genre] || '📖'
   }
 
   private buildChoicesPrompt(location: RouteContext): string {
@@ -353,37 +420,63 @@ ${routeInfo}
     const locationName = route.customInfo?.customName || route.address || `장소 ${locationIndex + 1}`
     const description = route.customInfo?.description || ''
     const storyHint = route.customInfo?.storyHint || ''
+    const genreEmoji = this.getGenreEmoji(settings.genre)
     
     const previousContext = previousChoices && previousChoices.length > 0 
       ? `\n**이전 선택들:**\n${previousChoices.map((choice, i) => `${i + 1}. ${choice.question} → ${choice.choice}`).join('\n')}`
       : ''
 
-    return `${settings.genre} 장르의 인터랙티브 소설을 위한 질문과 선택지를 생성해주세요.
+    return `${settings.genre} 장르의 인터랙티브 소설을 위한 **하나의 질문과 정확히 3개의 선택지**를 마크다운 형식으로 생성해주세요.
 
-**현재 장소 정보:**
-- 장소명: ${locationName}
-- 방문 시간: ${time}
-- 상황 설명: ${description}
-- 스토리 힌트: ${storyHint}
-- 장르: ${settings.genre}
-- 서술 방식: ${settings.style === 'first_person' ? '1인칭' : '3인칭'}${previousContext}
+**🚨 중요: 오직 하나의 질문과 정확히 3개의 선택지만 생성하세요!**
 
-**요구사항:**
-1. ${settings.genre} 장르에 어울리는 상황과 질문 생성
-2. 장소의 특성과 상황 설명을 반영
-3. 스토리 힌트를 활용한 흥미로운 전개
-4. 정확히 3개의 선택지 제공
-5. 각 선택지는 서로 다른 방향으로 이야기가 전개되도록 구성
+## 📍 현재 장소
+**${locationName}**
+- 시간: ${time}
+- 설명: ${description || '특별한 설명 없음'}
+- 힌트: ${storyHint || '자유롭게 상상하세요'}
 
-**응답 형식 (JSON 아님, 텍스트로):**
-> ### 🎯 질문: [이 장소에서 일어날 상황에 대한 질문]
-> 맥락: [선택에 도움이 되는 추가 정보나 분위기 설명]
-> 
-> 1) [선택지 1] - [결과 예상 설명]
-> 2) [선택지 2] - [결과 예상 설명]
-> 3) [선택지 3] - [결과 예상 설명]
+## 📋 마크다운 형식 (필수)
 
-질문과 선택지를 생성해주세요:`
+\`\`\`markdown
+### ${genreEmoji} [상황 제목]
+
+> **질문**: [구체적인 선택 상황]
+
+*[분위기나 추가 맥락 설명]*
+
+**당신의 선택은?**
+
+1. **[선택 1 제목]** - *[결과 힌트]*
+2. **[선택 2 제목]** - *[결과 힌트]*
+3. **[선택 3 제목]** - *[결과 힌트]*
+\`\`\`
+
+## ✅ 체크리스트
+- [ ] 질문은 > 인용문으로 시작
+- [ ] 선택지 제목은 **굵은 글씨**
+- [ ] 결과 설명은 *이탤릭체*
+- [ ] ${settings.genre} 장르 특성 반영
+- [ ] 정확히 3개의 선택지
+- [ ] 각 선택지는 구체적인 행동${previousContext}
+
+## 🎯 작성 예시
+
+### ${genreEmoji} 비밀의 문 앞에서
+
+> **질문**: 오래된 ${locationName}에서 숨겨진 문을 발견했습니다. 어떻게 하시겠습니까?
+
+*낡은 문에서 이상한 빛이 새어 나오고 있습니다.*
+
+**당신의 선택은?**
+
+1. **조심스럽게 문을 열어본다** - *미지의 세계로 첫발을 내딛는다*
+2. **주변을 더 조사한다** - *단서를 찾아 신중하게 접근한다*
+3. **다른 사람을 찾아간다** - *도움을 요청하거나 정보를 얻는다*
+
+---
+
+위 예시와 같은 형식으로 작성해주세요.`
   }
 
   private buildSectionPrompt(context: SectionGenerationContext): string {
@@ -447,66 +540,105 @@ ${currentContent.length > 2000 ? currentContent.substring(currentContent.length 
   }
 
   private parseStoryResponse(response: string): { content: string; choices: StoryChoice[] } {
-    // 제목과 본문 분리
-    const titleMatch = response.match(/제목:\s*(.+)/i)
-    const title = titleMatch ? titleMatch[1].trim() : ''
-    
-    // 선택지 섹션 찾기
-    const choicesMatch = response.match(/\*\*선택지:\*\*\s*([\s\S]+)$/)
-    const choicesSection = choicesMatch ? choicesMatch[1] : ''
-    
-    // 본문 추출 (제목 이후부터 선택지 이전까지)
-    let content = response
-    if (titleMatch) {
-      content = content.substring(titleMatch.index! + titleMatch[0].length)
-    }
-    if (choicesMatch) {
-      content = content.substring(0, choicesMatch.index! - (titleMatch ? titleMatch[0].length : 0))
-    }
-    
-    content = (title ? `# ${title}\n\n` : '') + content.trim()
-    
-    // 선택지 파싱
     const choices: StoryChoice[] = []
-    if (choicesSection) {
-      const choiceBlocks = choicesSection.split(/(?=\w+\s*-\s*)/g).filter(block => block.trim())
+    
+    // 개선된 정규식으로 마크다운 형식의 선택지 파싱
+    const choiceBlocks = response.matchAll(
+      /### [🚀💕😄🔍🎭⚔️👻🔮📖] (.+?)\n([\s\S]*?)(?=### [🚀💕😄🔍🎭⚔️👻🔮📖]|---|## 📍|$)/g
+    )
+    
+    let blockIndex = 0
+    for (const match of choiceBlocks) {
+      const sectionContent = match[2]
       
-      choiceBlocks.forEach((block, index) => {
-        const lines = block.trim().split('\n').filter(line => line.trim())
-        if (lines.length === 0) return
-        
-        const locationMatch = lines[0].match(/^(.+?)\s*-\s*(.+)$/)
-        if (!locationMatch) return
-        
-        const location = locationMatch[1].trim()
-        const question = locationMatch[2].trim()
-        
-        const options = lines.slice(1)
-          .filter(line => /^\d+\)/.test(line.trim()))
-          .map((line, optIndex) => {
-            const optMatch = line.match(/^\d+\)\s*(.+?)(?:\s*-\s*(.+))?$/)
-            if (!optMatch) return null
-            
-            return {
-              id: `choice-${index}-${optIndex}`,
-              text: optMatch[1].trim(),
-              description: optMatch[2] ? optMatch[2].trim() : optMatch[1].trim()
-            }
-          })
-          .filter(opt => opt !== null)
-        
-        if (options.length > 0) {
-          choices.push({
-            id: `choice-${index}`,
-            location,
-            question,
-            options: options as any[]
+      // 질문 파싱 - 인용문 형식
+      const questionMatch = sectionContent.match(/>\s*\*\*질문\*\*:\s*(.+?)(?=\n|$)/)
+      const question = questionMatch ? questionMatch[1].trim() : '무엇을 하시겠습니까?'
+      
+      // 현재 장소 찾기
+      const beforeMatchIndex = match.index || 0
+      const locationMatch = response.lastIndexOf('## 📍', beforeMatchIndex)
+      let location = '알 수 없는 장소'
+      if (locationMatch !== -1) {
+        const locMatch = response.substring(locationMatch).match(/## 📍\s*(.+?)(?=\n|$)/)
+        if (locMatch) location = locMatch[1].trim()
+      }
+      
+      // 선택지 파싱 - 굵은 글씨와 이탤릭 형식
+      const optionMatches = sectionContent.matchAll(
+        /(\d+)\.\s*\*\*(.+?)\*\*\s*-\s*\*(.+?)\*(?=\n|$)/g
+      )
+      
+      const options = []
+      for (const opt of optionMatches) {
+        options.push({
+          id: `choice-${blockIndex}-opt-${opt[1]}`,
+          text: opt[2].trim(),
+          description: opt[3].trim()
+        })
+      }
+      
+      // 최소 2개 이상의 선택지가 있을 때만 추가
+      if (options.length >= 2) {
+        choices.push({
+          id: `choice-${blockIndex}`,
+          location: location,
+          question: question,
+          options: options
+        })
+        blockIndex++
+      }
+    }
+    
+    // 선택지가 하나도 파싱되지 않은 경우 대체 파싱 시도
+    if (choices.length === 0) {
+      console.warn('마크다운 형식 파싱 실패, 대체 파싱 시도')
+      return this.parseStoryResponseFallback(response)
+    }
+    
+    return { content: response, choices }
+  }
+
+  // 폴백 파싱 메서드
+  private parseStoryResponseFallback(response: string): { content: string; choices: StoryChoice[] } {
+    const choices: StoryChoice[] = []
+    
+    // 간단한 패턴으로 선택지 찾기
+    const simpleChoicePattern = /(?:선택지|당신의 선택은?).*?:\s*\n([\s\S]*?)(?=\n\n|---|$)/g
+    const matches = response.matchAll(simpleChoicePattern)
+    
+    for (const match of matches) {
+      const choiceText = match[1]
+      const options = []
+      
+      // 숫자로 시작하는 라인 찾기
+      const lines = choiceText.split('\n')
+      for (const line of lines) {
+        const optMatch = line.match(/^\s*(\d+)[.)]\s*(.+)/)
+        if (optMatch) {
+          const parts = optMatch[2].split('-').map(s => s.trim())
+          const text = parts[0] || optMatch[2]
+          const description = parts[1] || text
+          
+          options.push({
+            id: `fallback-opt-${optMatch[1]}`,
+            text: text.replace(/\*\*/g, '').trim(),
+            description: description.replace(/[\*_]/g, '').trim()
           })
         }
-      })
+      }
+      
+      if (options.length > 0) {
+        choices.push({
+          id: `fallback-choice-${choices.length}`,
+          location: '장소',
+          question: '무엇을 하시겠습니까?',
+          options
+        })
+      }
     }
     
-    return { content, choices }
+    return { content: response, choices }
   }
 
   private parseChoicesResponse(response: string, location: RouteContext): StoryChoice {
@@ -556,14 +688,42 @@ ${currentContent.length > 2000 ? currentContent.substring(currentContent.length 
     const choices: Array<{ id: string; text: string; description: string }> = []
     
     for (const line of lines) {
-      // 질문 파싱 - 여러 형식 지원
-      if (line.includes('질문:')) {
+      // 질문 파싱 - 마크다운 인용 형식 지원
+      if (line.includes('**질문**:')) {
+        question = line.replace(/^.*?\*\*질문\*\*:\s*/, '').trim()
+        console.log('✅ [Gemini] 질문 파싱 성공:', question)
+      } else if (line.includes('질문:')) {
         question = line.replace(/^.*?질문:\s*/, '').trim()
         console.log('✅ [Gemini] 질문 파싱 성공:', question)
       } else if (line.startsWith('맥락:')) {
         context = line.replace('맥락:', '').trim()
         console.log('✅ [Gemini] 맥락 파싱 성공:', context)
+      } else if (/^\d+\.\s*\*\*/.test(line.trim())) {
+        // 마크다운 형식: "1. **텍스트** - *설명*" (완전한 형태)
+        let optMatch = line.match(/^\d+\.\s*\*\*(.+?)\*\*\s*-\s*\*(.+?)\*/)
+        if (optMatch) {
+          const choice = {
+            id: `choice_${locationIndex}_${choices.length}`,
+            text: optMatch[1].trim(),
+            description: optMatch[2].trim()
+          }
+          choices.push(choice)
+          console.log('✅ [Gemini] 마크다운 선택지 파싱 성공:', choice)
+        } else {
+          // 불완전한 형태 처리: "1. **텍스트**" (설명 없음 또는 잘림)
+          optMatch = line.match(/^\d+\.\s*\*\*(.+?)\*\*/)
+          if (optMatch) {
+            const choice = {
+              id: `choice_${locationIndex}_${choices.length}`,
+              text: optMatch[1].trim(),
+              description: optMatch[1].trim() // 텍스트를 설명으로도 사용
+            }
+            choices.push(choice)
+            console.log('✅ [Gemini] 불완전한 마크다운 선택지 파싱:', choice)
+          }
+        }
       } else if (/^\d+\)/.test(line.trim())) {
+        // 기존 형식: "1) 텍스트 - 설명"
         const optMatch = line.match(/^\d+\)\s*(.+?)(?:\s*-\s*(.+))?$/)
         if (optMatch) {
           const choice = {
@@ -572,7 +732,7 @@ ${currentContent.length > 2000 ? currentContent.substring(currentContent.length 
             description: optMatch[2] ? optMatch[2].trim() : optMatch[1].trim()
           }
           choices.push(choice)
-          console.log('✅ [Gemini] 선택지 파싱 성공:', choice)
+          console.log('✅ [Gemini] 기존 형식 선택지 파싱 성공:', choice)
         }
       }
     }
@@ -610,6 +770,12 @@ ${currentContent.length > 2000 ? currentContent.substring(currentContent.length 
           description: '이곳에서 개인적인 시간 갖기'
         }
       )
+    }
+    
+    // 선택지 수를 최대 3개로 제한
+    if (choices.length > 3) {
+      console.warn(`⚠️ [Gemini] 선택지 ${choices.length}개 생성됨, 처음 3개만 사용`)
+      choices.splice(3) // 처음 3개만 유지
     }
     
     console.log(`파싱된 선택지 수: ${choices.length}개`)

@@ -119,7 +119,8 @@ export interface ChoiceStrategy {
   generateStructuredPrompt(
     routes: RouteContext[], 
     preferences: StoryPreferences,
-    choiceLimit: number
+    choiceLimit: number,
+    previousChoices?: Array<{ question: string; choice: string }>
   ): string
   validateChoices(choices: any[]): boolean
 }

@@ -6,9 +6,11 @@
 export interface StorySettings {
   genre: StoryGenre
   style: StoryStyle
+  tone?: string
+  length?: number
 }
 
-export type StoryGenre = 'SF' | 'romance' | 'comedy' | 'mystery' | 'drama' | 'adventure'
+export type StoryGenre = 'SF' | 'romance' | 'comedy' | 'mystery' | 'drama' | 'adventure' | 'horror' | 'fantasy'
 
 export type StoryStyle = 'first_person' | 'third_person'
 
@@ -36,10 +38,12 @@ export interface InteractiveStorySession {
   id: string
   settings: StorySettings
   routes: any[] // RouteContext[]
-  progress: StoryProgress
-  status: 'setup' | 'in_progress' | 'completed'
+  responses: Array<{ question: string; choice: string }>
+  progress?: StoryProgress
+  status?: 'setup' | 'in_progress' | 'completed'
   createdAt: string
-  updatedAt: string
+  updatedAt?: string
+  completedAt?: string
 }
 
 // 애니메이션 설정

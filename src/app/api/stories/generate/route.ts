@@ -9,9 +9,7 @@ import { getAIProvider } from '@/shared/lib/ai'
 import { 
   validateStoryPreferences, 
   validateRoutes,
-  compressRouteData,
-  calculateTokenCost,
-  retryWithBackoff
+  compressRouteData
 } from '@/shared/lib/ai'
 import { sanitizeJson } from '@/shared/lib/validation/inputValidation'
 import { createOptimizedAIService, PRODUCTION_CONFIG } from '@/shared/lib/ai/optimization'
@@ -34,12 +32,12 @@ export async function POST(request: NextRequest) {
     // 2. 요청 데이터 파싱 및 검증
     const rawBody = await request.json()
     const body = sanitizeJson(rawBody)
-    const { selectedRoutes, preferences, timelineId, aiProvider = 'gemini' } = body
+    const { storyId, selectedRoutes, preferences, timelineId, aiProvider = 'gemini', previousChoices = [] } = body
 
-    if (!selectedRoutes || !preferences) {
+    if (!storyId || !selectedRoutes || !preferences) {
       return NextResponse.json({
         success: false,
-        error: '필수 데이터가 누락되었습니다. (selectedRoutes, preferences)'
+        error: '필수 데이터가 누락되었습니다. (storyId, selectedRoutes, preferences)'
       }, { status: 400 })
     }
 
@@ -103,7 +101,6 @@ export async function POST(request: NextRequest) {
 
     // 6. 즉시 소설 생성 시도 (10초 제한)
     try {
-      const aiProviderInstance = getAIProvider(aiProvider)
       
       // 6.1 백그라운드 작업 상태 업데이트
       await adminSupabase
@@ -114,18 +111,56 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', jobData.id)
 
-      // 6.2 AI 소설 생성 (최적화 서비스 사용)
+      // 6.2 AI 소설 생성 (최적화 서비스 사용 - 재시도 로직 포함)
       const optimizedAI = createOptimizedAIService(PRODUCTION_CONFIG)
-      const aiResponse = await retryWithBackoff(async () => {
-        return await optimizedAI.generateStory(
-          selectedRoutes,
-          preferences,
-          user.id
-        )
-      }, 2, 1000)
-
-      if (!aiResponse.success) {
-        throw new Error(aiResponse.error || 'AI 소설 생성에 실패했습니다.')
+      const MAX_RETRIES = 3
+      let retryCount = 0
+      let aiResponse = null
+      let lastError = null
+      
+      while (retryCount < MAX_RETRIES) {
+        try {
+          // 재시도 시 캐시 무효화
+          if (retryCount > 0) {
+            console.log(`Retry attempt ${retryCount}, clearing cache...`)
+            await optimizedAI.clearCache()
+          }
+          
+          aiResponse = await optimizedAI.generateStory(
+            selectedRoutes,
+            preferences,
+            user.id,
+            previousChoices
+          )
+          
+          // 응답 품질 검증
+          if (aiResponse.success && 
+              aiResponse.data?.content && 
+              aiResponse.data.content.length >= 1000 &&
+              aiResponse.data?.choices && 
+              aiResponse.data.choices.length > 0) {
+            console.log('AI response passed quality check')
+            break
+          } else {
+            lastError = new Error('Response quality check failed')
+            console.warn('Response quality issues:', {
+              contentLength: aiResponse.data?.content?.length || 0,
+              choicesCount: aiResponse.data?.choices?.length || 0
+            })
+          }
+        } catch (error) {
+          lastError = error
+          console.error(`AI generation attempt ${retryCount + 1} failed:`, error)
+        }
+        
+        retryCount++
+        if (retryCount < MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount))
+        }
+      }
+      
+      if (!aiResponse?.success) {
+        throw lastError || new Error('AI generation failed after retries')
       }
       
       console.log('AI Response success:', aiResponse.success)
@@ -249,10 +284,14 @@ export async function POST(request: NextRequest) {
       
       storyInsertData.timeline_id = finalTimelineId
 
-      // Service Role을 사용하여 RLS 우회한 스토리 저장
+      // Service Role을 사용하여 기존 스토리 업데이트
       const { data: storyData, error: storyError } = await adminSupabase
         .from('stories')
-        .insert(storyInsertData)
+        .update({
+          ...storyInsertData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', storyId)
         .select()
         .single()
 
@@ -263,9 +302,6 @@ export async function POST(request: NextRequest) {
 
       // 8. AI 프롬프트 로그 저장 (Service Role 사용)
       if (aiResponse.tokenUsage) {
-        const provider = aiResponse.optimization?.provider || aiProvider
-        const tokenCost = calculateTokenCost(aiResponse.tokenUsage, provider)
-        
         await adminSupabase
           .from('ai_prompts')
           .insert({

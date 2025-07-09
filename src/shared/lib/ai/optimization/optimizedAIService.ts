@@ -70,7 +70,8 @@ export class OptimizedAIService {
   async generateStory(
     routes: RouteContext[],
     preferences: StoryPreferences,
-    userId?: string
+    userId?: string,
+    previousChoices?: Array<{ question: string; choice: string }>
   ): Promise<any> {
     const startTime = Date.now()
     let originalTokens = 0
@@ -83,8 +84,8 @@ export class OptimizedAIService {
     const provider = this.selectProvider(preferences)
 
     try {
-      // 1. 프롬프트 생성
-      let prompt = this.generatePrompt(routes, preferences)
+      // 1. 프롬프트 생성 (이전 선택지 포함)
+      let prompt = this.generatePrompt(routes, preferences, previousChoices)
       originalTokens = this.estimateTokens(prompt)
 
       // 2. 캐시 확인
@@ -126,12 +127,12 @@ export class OptimizedAIService {
       // 4. 선택지 제한을 위한 구조화된 프롬프트 생성
       if (this.choiceStrategy) {
         const maxChoices = this.config.choices?.maxChoices || 3
-        prompt = this.choiceStrategy.generateStructuredPrompt(routes, preferences, maxChoices)
+        prompt = this.choiceStrategy.generateStructuredPrompt(routes, preferences, maxChoices, previousChoices)
         finalTokens = this.estimateTokens(prompt)
       }
 
       // 5. AI 호출
-      const aiResponse = await this.callAIProvider(prompt, provider)
+      const aiResponse = await this.callAIProvider(prompt, provider, previousChoices)
       
       // 6. 선택지 제한 후처리
       if (this.choiceStrategy && this.config.choices?.enforceLimit) {
@@ -144,17 +145,30 @@ export class OptimizedAIService {
         }
       }
 
-      // 7. 캐시 저장
+      // 7. 캐시 저장 전 품질 검증
       if (this.cache) {
-        const cacheValue = {
-          content: aiResponse.content,
-          choices: aiResponse.choices || [],
-          tokenUsage: aiResponse.tokenUsage,
-          timestamp: Date.now(),
-          provider,
-          quality: 1.0
+        const responseToValidate = {
+          content: aiResponse.content || aiResponse.data?.content,
+          choices: aiResponse.choices || aiResponse.data?.choices || []
         }
-        await this.cache.set(cacheKey, cacheValue)
+        
+        const isHighQuality = await this.validateResponseQuality(responseToValidate)
+        
+        if (isHighQuality) {
+          const qualityScore = this.calculateQualityScore(responseToValidate)
+          const cacheValue = {
+            content: responseToValidate.content,
+            choices: responseToValidate.choices,
+            tokenUsage: aiResponse.tokenUsage,
+            timestamp: Date.now(),
+            provider,
+            quality: qualityScore
+          }
+          await this.cache.set(cacheKey, cacheValue)
+          console.log('High quality response cached with score:', qualityScore)
+        } else {
+          console.warn('Response quality too low, skipping cache')
+        }
       }
 
       // 8. 최종 응답 생성
@@ -189,42 +203,24 @@ export class OptimizedAIService {
     }
   }
 
-  private generatePrompt(routes: RouteContext[], preferences: StoryPreferences): string {
-    // 구조화된 프롬프트 생성기를 사용하여 마크업 포함 프롬프트 생성
-    if (this.choiceStrategy) {
-      return this.choiceStrategy.generateStructuredPrompt(routes, preferences, 3)
+  private generatePrompt(
+    routes: RouteContext[], 
+    preferences: StoryPreferences,
+    previousChoices?: Array<{ question: string; choice: string }>
+  ): string {
+    // 구조화된 프롬프트 생성기가 없으면 생성
+    if (!this.choiceStrategy) {
+      const choiceConfig = {
+        maxChoices: 3 as 2 | 3,
+        enforceLimit: true,
+        qualityThreshold: 0.8
+      }
+      this.choiceStrategy = createChoiceStrategy(choiceConfig)
     }
     
-    // 폴백: 기본 프롬프트 (마크업 포함)
-    const context = routes.map((route, index) => `${index + 1}. ${route.story || route.address} → ${route.choice || ''}`).join('\n')
-    const genreMarker = this.getGenreMarkerFallback(preferences.genre)
-    
-    return `
-당신은 소설 작가입니다. 마크다운 형식으로 응답해주세요.
-
-## 스토리 설정
-- 장르: ${preferences.genre || '일반'}
-- 스타일: ${preferences.style || '현실적'}
-- 분위기: ${preferences.mood || '중립'}
-
-## 현재 스토리 맥락
-지금까지의 이야기:
-${context}
-
-## 마크다운 형식 응답
-### 이야기 전개
-[다음 전개를 150-300자로 작성]
-
-## ${genreMarker} 질문
-어떤 행동을 하시겠습니까?
-
-### 선택지
-1. **선택지 제목** - 선택지 설명
-2. **선택지 제목** - 선택지 설명  
-3. **선택지 제목** - 선택지 설명
-
-반드시 마크다운 형식을 사용하여 응답하세요.
-    `.trim()
+    // 항상 구조화된 프롬프트 사용 (이전 선택지 포함)
+    const maxChoices = this.config.choices?.maxChoices || (3 as 2 | 3)
+    return this.choiceStrategy.generateStructuredPrompt(routes, preferences, maxChoices, previousChoices)
   }
 
   private selectProvider(preferences: StoryPreferences): 'gemini' | 'claude' {
@@ -232,47 +228,76 @@ ${context}
     return 'gemini'
   }
 
-  private async callAIProvider(prompt: string, provider: 'gemini' | 'claude'): Promise<any> {
-    // Parse context from structured prompt
-    const routesMatch = prompt.match(/지금까지의 이야기:\n([\s\S]*?)(?=\n\n다음|$)/)
-    const genreMatch = prompt.match(/장르:\s*(.+)/)
-    const styleMatch = prompt.match(/스타일:\s*(.+)/)
-    const moodMatch = prompt.match(/분위기:\s*(.+)/)
+  private async callAIProvider(prompt: string, provider: 'gemini' | 'claude', previousChoices?: Array<{ question: string; choice: string }>): Promise<any> {
+    try {
+      // 프롬프트에서 컨텍스트 정보 추출
+      const contextData = this.extractContextFromPrompt(prompt, previousChoices)
+      
+      if (provider === 'claude') {
+        const claudeProvider = new ClaudeProvider(process.env.CLAUDE_API_KEY)
+        return await claudeProvider.generateStory(contextData)
+      } else {
+        const geminiProvider = new GeminiProvider(process.env.GEMINI_API_KEY)
+        const response = await geminiProvider.generateStory(contextData, previousChoices)
+        
+        // 응답 검증
+        if (!response.success || !response.data?.content) {
+          throw new Error('Invalid AI response')
+        }
+        
+        return response
+      }
+    } catch (error) {
+      console.error(`${provider} AI call failed:`, error)
+      throw error
+    }
+  }
+
+  // 프롬프트에서 컨텍스트 추출하는 헬퍼 메서드
+  private extractContextFromPrompt(prompt: string, previousChoices?: Array<{ question: string; choice: string }>): any {
+    // 장르 추출
+    const genreMatch = prompt.match(/\*\*장르\*\*:\s*(.+)/)
+    const styleMatch = prompt.match(/\*\*시점\*\*:\s*(.+)/)
+    const moodMatch = prompt.match(/\*\*분위기\*\*:\s*(.+)/)
     
-    const parsedRoutes: RouteContext[] = []
-    if (routesMatch && routesMatch[1]) {
-      const routeLines = routesMatch[1].split('\n').filter(line => line.trim())
+    // 경로 정보 추출
+    const routesSection = prompt.match(/## 📖 현재까지의 이야기\n([\s\S]*?)(?=\n##|$)/)
+    const routes: RouteContext[] = []
+    
+    if (routesSection) {
+      const routeLines = routesSection[1].trim().split('\n\n')
       routeLines.forEach((line, index) => {
-        const storyMatch = line.match(/\d+\.\s*(.+?)(?=\s*선택:|$)/)
-        const choiceMatch = line.match(/선택:\s*(.+)/)
-        if (storyMatch) {
-          parsedRoutes.push({
+        const match = line.match(/\d+\.\s*(.+?)\n\s*선택:\s*(.+)/)
+        if (match) {
+          routes.push({
             id: `route-${index}`,
-            address: storyMatch[1].trim(),
+            address: `장소 ${index + 1}`,
             timestamp: new Date().toISOString(),
-            story: storyMatch[1].trim(),
-            choice: choiceMatch ? choiceMatch[1].trim() : undefined
+            story: match[1].trim(),
+            choice: match[2].trim()
           })
         }
       })
     }
     
-    const context = {
-      routes: parsedRoutes,
+    // 기본 경로가 없으면 추가
+    if (routes.length === 0) {
+      routes.push({
+        id: 'route-0',
+        address: '시작 지점',
+        timestamp: new Date().toISOString(),
+        story: '새로운 이야기의 시작'
+      })
+    }
+    
+    return {
+      routes,
       preferences: {
         genre: (genreMatch?.[1] || 'adventure') as any,
-        style: (styleMatch?.[1] || 'first_person') as any,
-        tone: (moodMatch?.[1] || 'adventurous') as any,
-        length: 5000 as const
+        style: styleMatch?.[1]?.includes('1인칭') ? 'first_person' : 'third_person' as any,
+        tone: (moodMatch?.[1] || 'neutral') as any,
+        length: 5000
       }
-    }
-
-    if (provider === 'claude') {
-      const claudeProvider = new ClaudeProvider(process.env.CLAUDE_API_KEY)
-      return await claudeProvider.generateStory(context)
-    } else {
-      const geminiProvider = new GeminiProvider(process.env.GEMINI_API_KEY)
-      return await geminiProvider.generateStory(context)
     }
   }
 
@@ -373,6 +398,95 @@ ${context}
     if (this.cache) {
       await this.cache.clear()
     }
+  }
+
+  // 응답 품질 검증
+  private async validateResponseQuality(response: any): Promise<boolean> {
+    // 1. 최소 길이 검증
+    if (!response.content || response.content.length < 1000) {
+      console.warn('Response too short:', response.content?.length || 0)
+      return false
+    }
+    
+    // 2. 선택지 존재 및 품질 검증
+    if (!response.choices || response.choices.length === 0) {
+      console.warn('No choices found in response')
+      return false
+    }
+    
+    // 3. 각 선택지의 완성도 검증
+    for (const choice of response.choices) {
+      if (!choice.location || !choice.question) {
+        console.warn('Invalid choice structure:', choice)
+        return false
+      }
+      
+      if (!choice.options || choice.options.length < 2) {
+        console.warn('Insufficient options in choice:', choice)
+        return false
+      }
+      
+      // 각 옵션의 품질 검증
+      for (const option of choice.options) {
+        if (!option.text || option.text.length < 5) {
+          console.warn('Option text too short:', option)
+          return false
+        }
+      }
+    }
+    
+    // 4. 마크다운 형식 검증
+    const hasTitle = response.content.includes('#')
+    const hasLocation = response.content.includes('## 📍')
+    const hasChoiceSection = response.content.match(/### [🚀💕😄🔍🎭⚔️👻🔮📖]/)
+    
+    if (!hasTitle || !hasLocation || !hasChoiceSection) {
+      console.warn('Missing required markdown structure')
+      return false
+    }
+    
+    // 5. 콘텐츠 품질 점수 계산
+    const qualityScore = this.calculateQualityScore(response)
+    if (qualityScore < 0.7) {
+      console.warn('Low quality score:', qualityScore)
+      return false
+    }
+    
+    return true
+  }
+
+  // 품질 점수 계산
+  private calculateQualityScore(response: any): number {
+    let score = 0
+    
+    // 길이 점수 (0-0.3)
+    const lengthScore = Math.min(response.content.length / 3000, 1) * 0.3
+    score += lengthScore
+    
+    // 선택지 완성도 (0-0.3)
+    const avgOptionsPerChoice = response.choices.reduce((sum: number, c: any) => 
+      sum + (c.options?.length || 0), 0) / (response.choices.length || 1)
+    const choiceScore = Math.min(avgOptionsPerChoice / 3, 1) * 0.3
+    score += choiceScore
+    
+    // 마크다운 구조 완성도 (0-0.2)
+    const markdownElements = [
+      response.content.includes('# '),
+      response.content.includes('## 📍'),
+      response.content.includes('### '),
+      response.content.includes('**'),
+      response.content.includes('*'),
+      response.content.includes('>')
+    ]
+    const markdownScore = (markdownElements.filter(Boolean).length / 6) * 0.2
+    score += markdownScore
+    
+    // 다양성 점수 (0-0.2)
+    const uniqueWords = new Set(response.content.split(/\s+/))
+    const diversityScore = Math.min(uniqueWords.size / 500, 1) * 0.2
+    score += diversityScore
+    
+    return score
   }
 
   private getGenreMarkerFallback(genre?: string): string {

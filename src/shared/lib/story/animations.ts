@@ -53,6 +53,22 @@ export const GENRE_ANIMATIONS: Record<StoryGenre, GenreAnimationConfig> = {
     backgroundPattern: 'organic',
     transitionType: 'rotate',
     duration: 0.9
+  },
+  horror: {
+    genre: 'horror',
+    primaryColor: '#8b0000',
+    secondaryColor: '#000000',
+    backgroundPattern: 'geometric',
+    transitionType: 'scale',
+    duration: 1.2
+  },
+  fantasy: {
+    genre: 'fantasy',
+    primaryColor: '#9370db',
+    secondaryColor: '#4b0082',
+    backgroundPattern: 'organic',
+    transitionType: 'bounce',
+    duration: 1.1
   }
 }
 
